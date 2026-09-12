@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, computed_field
+from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,16 @@ class Settings(BaseSettings):
     postgres_db: str = "ai_operations_agent"
 
     redis_url: RedisDsn = Field(default="redis://localhost:6379/0")  # type: ignore[assignment]
+
+    # ── LLM ──────────────────────────────────────────────────────────────────
+    #: The agent runs its deterministic path when this is off or unauthenticated,
+    #: so an absent key degrades the system rather than breaking it.
+    llm_enabled: bool = True
+    llm_model: str = "claude-opus-5"
+    llm_max_tokens: int = 4096
+    llm_timeout_seconds: float = 60.0
+    llm_max_retries: int = 2
+    anthropic_api_key: SecretStr | None = None
 
     # ── Agent guardrails ─────────────────────────────────────────────────────
     max_tool_calls: int = 12

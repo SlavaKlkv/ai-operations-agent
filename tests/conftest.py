@@ -17,6 +17,23 @@ from app.agent.state import initial_state
 TASK = "После последнего релиза billing-service резко выросло количество 5xx. Разберись."
 
 
+@pytest.fixture(autouse=True)
+def offline(monkeypatch):
+    """No test may reach a real model provider.
+
+    Without this, a developer with ANTHROPIC_API_KEY exported would silently
+    run the suite against a paid API — slowly, nondeterministically, and with
+    results that differ from CI. Tests that want a model inject a scripted one.
+    """
+    from app.core.config import get_settings
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("APP_ENV", "test")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 @pytest.fixture
 def scenario():
     return BILLING_5XX
