@@ -25,7 +25,11 @@ class NoPendingApproval(LookupError):
 
 
 async def create_run(
-    session: AsyncSession, *, task: str, target_service: str | None = None
+    session: AsyncSession,
+    *,
+    task: str,
+    target_service: str | None = None,
+    actor: str = "system",
 ) -> AgentRun:
     run = AgentRun(
         task=task,
@@ -37,7 +41,11 @@ async def create_run(
     await session.flush()
     session.add(
         AuditEvent(
-            run_id=run.id, at=utcnow(), actor="system", action="run.created", detail={"task": task}
+            run_id=run.id,
+            at=utcnow(),
+            actor=actor,
+            action="run.created",
+            detail={"task": task},
         )
     )
     await session.commit()

@@ -23,6 +23,7 @@ from app.api.schemas import (
     ToolCallView,
     TraceStep,
 )
+from app.api.security import Principal, current_principal, require_approver
 from app.core.config import get_settings
 from app.db.base import get_session
 from app.db.models import AgentRun
@@ -87,7 +88,11 @@ def _interrupt_payload(final: dict) -> dict | None:
 
 
 @router.post("", response_model=RunDetail, status_code=status.HTTP_201_CREATED)
-async def start_run(payload: RunRequest, session: AsyncSession = Depends(get_session)) -> RunDetail:
+async def start_run(
+    payload: RunRequest,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(current_principal),
+) -> RunDetail:
     """Start an investigation and return its terminal state.
 
     The run executes inline: an investigation against mock or in-process
@@ -100,7 +105,10 @@ async def start_run(payload: RunRequest, session: AsyncSession = Depends(get_ses
     arrives as a separate request to ``POST /runs/{id}/approval``.
     """
     run = await run_store.create_run(
-        session, task=payload.task, target_service=payload.target_service
+        session,
+        task=payload.task,
+        target_service=payload.target_service,
+        actor=principal.actor,
     )
     recording.record_run_started(payload.target_service)
 
@@ -121,6 +129,7 @@ async def decide_approval(
     run_id: uuid.UUID,
     decision: ApprovalDecision,
     session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(require_approver),
 ) -> RunDetail:
     """Approve or reject the write the run is waiting on, and resume it.
 
@@ -141,7 +150,7 @@ async def decide_approval(
         session,
         run,
         approved=decision.approved,
-        decided_by=decision.decided_by,
+        decided_by=principal.actor,
         note=decision.note,
     )
     recording.record_decision(approved=decision.approved)
@@ -151,7 +160,7 @@ async def decide_approval(
         Command(
             resume={
                 "approved": decision.approved,
-                "decided_by": decision.decided_by,
+                "decided_by": principal.actor,
                 "note": decision.note,
             }
         ),
@@ -165,7 +174,11 @@ async def decide_approval(
 
 
 @router.get("/{run_id}/trace", response_model=RunTrace)
-async def get_trace(run_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> RunTrace:
+async def get_trace(
+    run_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(current_principal),
+) -> RunTrace:
     """Why the agent arrived where it did.
 
     Reconstructed from the observations every node appended as it ran, so it
@@ -200,14 +213,20 @@ async def get_trace(run_id: uuid.UUID, session: AsyncSession = Depends(get_sessi
 
 @router.get("", response_model=list[RunSummary])
 async def list_runs(
-    limit: int = 50, session: AsyncSession = Depends(get_session)
+    limit: int = 50,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(current_principal),
 ) -> list[RunSummary]:
     runs = await run_store.list_runs(session, limit=min(limit, 200))
     return [RunSummary.model_validate(r) for r in runs]
 
 
 @router.get("/{run_id}", response_model=RunDetail)
-async def get_run(run_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> RunDetail:
+async def get_run(
+    run_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    principal: Principal = Depends(current_principal),
+) -> RunDetail:
     run = await run_store.get_run(session, run_id)
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="run not found")

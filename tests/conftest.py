@@ -97,22 +97,69 @@ async def db_session():
     await engine.dispose()
 
 
-@pytest.fixture
-async def client(db_session):
-    """HTTP client with the database dependency pointed at SQLite."""
-    from asgi_lifespan import LifespanManager
-    from httpx import ASGITransport, AsyncClient
+async def _issue_token(session, email: str, *, can_approve: bool) -> str:
+    """Create a user and return their bearer token."""
+    from app.api.security import issue_token
+    from app.db.models import User
 
+    token, digest = issue_token()
+    session.add(
+        User(
+            email=email,
+            display_name=email.split("@")[0],
+            can_approve=can_approve,
+            api_token_hash=digest,
+        )
+    )
+    await session.commit()
+    return token
+
+
+@pytest.fixture
+async def approver_token(db_session):
+    return await _issue_token(db_session, "oncall@example.com", can_approve=True)
+
+
+@pytest.fixture
+async def reader_token(db_session):
+    """Someone who can investigate but not authorise a change."""
+    return await _issue_token(db_session, "viewer@example.com", can_approve=False)
+
+
+@pytest.fixture
+async def app(db_session):
+    """The application, with the database pointed at the throwaway SQLite."""
     from app.db.base import get_session
     from app.main import create_app
 
     async def override_session():
         yield db_session
 
-    app = create_app()
-    app.dependency_overrides[get_session] = override_session
+    built = create_app()
+    built.dependency_overrides[get_session] = override_session
+    return built
+
+
+@pytest.fixture
+async def http_client(app):
+    """An unauthenticated client. Most tests want ``client`` instead."""
+    from asgi_lifespan import LifespanManager
+    from httpx import ASGITransport, AsyncClient
 
     async with LifespanManager(app):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as http:
-            yield http
+        async with AsyncClient(transport=transport, base_url="http://test") as built:
+            yield built
+
+
+@pytest.fixture
+async def client(http_client, approver_token):
+    """The default client: authenticated, and allowed to approve writes."""
+    http_client.headers["authorization"] = f"Bearer {approver_token}"
+    return http_client
+
+
+@pytest.fixture
+async def reader_client(http_client, reader_token):
+    http_client.headers["authorization"] = f"Bearer {reader_token}"
+    return http_client

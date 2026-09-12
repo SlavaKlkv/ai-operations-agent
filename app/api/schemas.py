@@ -66,19 +66,18 @@ class PendingApproval(BaseModel):
 
 
 class ApprovalDecision(BaseModel):
-    """A human decision. Carries no action — only a yes or a no.
+    """A human decision: a yes or a no, and optionally why.
 
-    Deliberately unable to express *what* to do: the action is whatever the
+    Deliberately unable to express *what* to do — the action is whatever the
     graph checkpointed, so an approval cannot be redirected onto content the
-    reviewer never saw.
+    reviewer never saw. And deliberately unable to say *who* — identity comes
+    from the credential, because a name in a request body is a label, not an
+    identity.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     approved: bool
-    decided_by: str = Field(
-        min_length=3, max_length=320, description="Who is making this decision."
-    )
     note: str = Field(default="", max_length=2000, description="Why, for the audit trail.")
 
 
@@ -113,3 +112,4 @@ class HealthResponse(BaseModel):
     version: str
     environment: str
     durable_approvals: bool = False
+    authentication: bool = True

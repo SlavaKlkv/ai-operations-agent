@@ -84,7 +84,7 @@ async def test_approving_resumes_the_run_and_creates_the_issue(client):
     created = (await client.post("/runs", json={"task": TASK})).json()
     response = await client.post(
         f"/runs/{created['id']}/approval",
-        json={"approved": True, "decided_by": "oncall@example.com", "note": "looks right"},
+        json={"approved": True, "note": "looks right"},
     )
     assert response.status_code == 200
 
@@ -102,7 +102,7 @@ async def test_rejecting_ends_the_run_without_touching_anything(client):
     body = (
         await client.post(
             f"/runs/{created['id']}/approval",
-            json={"approved": False, "decided_by": "oncall@example.com", "note": "duplicate"},
+            json={"approved": False, "note": "duplicate"},
         )
     ).json()
 
@@ -116,7 +116,7 @@ async def test_rejecting_ends_the_run_without_touching_anything(client):
 async def test_the_write_is_executed_exactly_once(client):
     """Approving twice must not file two issues."""
     created = (await client.post("/runs", json={"task": TASK})).json()
-    decision = {"approved": True, "decided_by": "oncall@example.com"}
+    decision = {"approved": True}
 
     first = await client.post(f"/runs/{created['id']}/approval", json=decision)
     second = await client.post(f"/runs/{created['id']}/approval", json=decision)
@@ -133,15 +133,18 @@ async def test_a_decision_on_a_run_that_never_paused_is_refused(client):
     created = (await client.post("/runs", json={"task": VAGUE})).json()
     response = await client.post(
         f"/runs/{created['id']}/approval",
-        json={"approved": True, "decided_by": "oncall@example.com"},
+        json={"approved": True},
     )
     assert response.status_code == 409
 
 
-async def test_a_decision_must_say_who_made_it(client):
-    """An approval with no name is not an audit trail."""
+async def test_a_decision_cannot_claim_to_be_someone_else(client):
+    """Identity comes from the credential; a name in the body is a label."""
     created = (await client.post("/runs", json={"task": TASK})).json()
-    response = await client.post(f"/runs/{created['id']}/approval", json={"approved": True})
+    response = await client.post(
+        f"/runs/{created['id']}/approval",
+        json={"approved": True, "decided_by": "someone.else@example.com"},
+    )
     assert response.status_code == 422
 
 
@@ -151,11 +154,7 @@ async def test_a_decision_cannot_carry_its_own_action(client):
     created = (await client.post("/runs", json={"task": TASK})).json()
     response = await client.post(
         f"/runs/{created['id']}/approval",
-        json={
-            "approved": True,
-            "decided_by": "oncall@example.com",
-            "arguments": {"title": "something else entirely"},
-        },
+        json={"approved": True, "arguments": {"title": "something else entirely"}},
     )
     assert response.status_code == 422
 
@@ -169,7 +168,7 @@ async def test_the_decision_is_recorded_before_the_action_runs(client, db_sessio
     created = (await client.post("/runs", json={"task": TASK})).json()
     await client.post(
         f"/runs/{created['id']}/approval",
-        json={"approved": True, "decided_by": "oncall@example.com", "note": "ship it"},
+        json={"approved": True, "note": "ship it"},
     )
 
     approvals = (await db_session.execute(select(Approval))).scalars().all()
@@ -192,10 +191,10 @@ async def test_the_audit_trail_names_the_person_not_the_agent(client, db_session
     created = (await client.post("/runs", json={"task": TASK})).json()
     await client.post(
         f"/runs/{created['id']}/approval",
-        json={"approved": False, "decided_by": "sre@example.com", "note": "not now"},
+        json={"approved": False, "note": "not now"},
     )
 
     events = (await db_session.execute(select(AuditEvent))).scalars().all()
     decision = next(e for e in events if e.action == "approval.rejected")
-    assert decision.actor == "sre@example.com"
+    assert decision.actor == "oncall@example.com"
     assert decision.detail["note"] == "not now"

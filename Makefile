@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 VENV := .venv/bin
 
-.PHONY: help install up down observability migrate run test eval lint format check clean
+.PHONY: help install up down observability migrate run token users test eval lint format check clean
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -23,6 +23,12 @@ down:  ## Stop the stack
 
 migrate:  ## Apply database migrations
 	$(VENV)/alembic upgrade head
+
+token:  ## Issue an API token: make token EMAIL=you@example.com APPROVE=1
+	$(VENV)/python -m app.cli token $(EMAIL) $(if $(APPROVE),--approve,)
+
+users:  ## List users and whether they hold a token
+	$(VENV)/python -m app.cli users
 
 run:  ## Run the API with autoreload
 	$(VENV)/uvicorn app.main:app --reload --port 8000

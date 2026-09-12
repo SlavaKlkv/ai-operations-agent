@@ -45,6 +45,11 @@ class User(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     #: Who may approve write actions. Read-only users can still start runs.
     can_approve: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: SHA-256 of the API token. The token itself is shown once, at issue, and
+    #: never stored — a leaked database must not hand over working credentials.
+    api_token_hash: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True, index=True
+    )
 
     runs: Mapped[list[AgentRun]] = relationship(back_populates="user")
 

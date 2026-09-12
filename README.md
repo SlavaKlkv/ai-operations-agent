@@ -121,6 +121,7 @@ cp .env.example .env          # ANTHROPIC_API_KEY можно оставить п
 make install                  # venv и зависимости
 make up                       # PostgreSQL и Redis
 make migrate                  # схема БД
+make token EMAIL=you@example.com APPROVE=1   # токен показывается один раз
 make run                      # http://localhost:8000/docs
 ```
 
@@ -140,7 +141,10 @@ make eval
 **1. Запустить расследование.**
 
 ```bash
+export TOKEN=aoa_…   # из `make token`
+
 curl -sX POST localhost:8000/runs \
+  -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
   -d '{"task":"После последнего релиза billing-service резко выросло количество 5xx. Разберись и подготовь issue."}'
 ```
@@ -173,7 +177,7 @@ curl -sX POST localhost:8000/runs \
 **2. Посмотреть, как он к этому пришёл.**
 
 ```bash
-curl -s localhost:8000/runs/$RUN_ID/trace
+curl -s localhost:8000/runs/$RUN_ID/trace -H "authorization: Bearer $TOKEN"
 ```
 
 Трассировка — это узлы, вызовы инструментов, аргументы, краткие результаты и точки
@@ -184,9 +188,14 @@ curl -s localhost:8000/runs/$RUN_ID/trace
 
 ```bash
 curl -sX POST localhost:8000/runs/$RUN_ID/approval \
+  -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
-  -d '{"approved": true, "decided_by": "oncall@example.com", "note": "согласен, откатываем"}'
+  -d '{"approved": true, "note": "согласен, откатываем"}'
 ```
+
+Обратите внимание, чего в теле запроса нет: имени решающего. Оно берётся из токена —
+имя в теле запроса это подпись, а не удостоверение, и аудит, построенный на такой
+подписи, ничего не стоит. Токен без права `can_approve` получит здесь `403`.
 
 Только теперь issue создаётся. Отказ завершает запуск без изменений во внешних системах и
 записывает причину в аудит.
@@ -199,12 +208,23 @@ curl -sX POST localhost:8000/runs/$RUN_ID/approval \
 | `GET` | `/runs` | Список запусков |
 | `GET` | `/runs/{id}` | Запуск целиком: анализ, вызовы инструментов, ожидающее подтверждение |
 | `GET` | `/runs/{id}/trace` | Восстановленный ход выполнения: узлы, ветвления, инструменты |
-| `POST` | `/runs/{id}/approval` | Решение человека. Возобновляет граф; `409`, если запуск не ждёт решения |
+| `POST` | `/runs/{id}/approval` | Решение человека. Требует права `can_approve`; `409`, если запуск не ждёт решения |
 | `GET` | `/mcp/servers` | Подключённые MCP-серверы и обнаруженные инструменты. `503` при деградации |
 | `GET` | `/metrics` | Метрики Prometheus |
 | `GET` | `/health` | Живость и durable-ли пауза подтверждения |
 
 Интерактивная документация — `/docs`.
+
+Все эндпоинты запусков требуют `Authorization: Bearer <токен>`; `/health` и `/metrics`
+открыты — проба готовности, которой нужен секрет, рано или поздно окажется настроена
+неправильно, а содержимого расследований она не раскрывает. Токены выпускаются командой,
+а не эндпоинтом: эндпоинт, выдающий токены, — это эндпоинт, у которого их попросит тот,
+кто его найдёт. Хранится только SHA-256 от токена.
+
+| Право | Что можно |
+|---|---|
+| действующий токен | запускать расследования, читать запуски и трассировки |
+| `can_approve` | дополнительно — подтверждать запись во внешнюю систему |
 
 ## MCP как слой интеграции
 
@@ -328,6 +348,7 @@ make observability      # поднимает стек вместе с Prometheus
 | `MAX_TOOL_CALLS` | `12` | Бюджет вызовов на запуск |
 | `MAX_WORKFLOW_STEPS` | `30` | Бюджет шагов графа |
 | `TOOL_TIMEOUT_SECONDS` | `15` | Таймаут одного вызова |
+| `AUTH_ENABLED` | `true` | Выключить только для локальной разработки; видно в `/health` |
 | `MCP_ENABLED` | `true` | Выключить → in-process мок-провайдеры вместо MCP-серверов |
 | `CACHE_ENABLED` | `true` | Кэш результатов read-инструментов в Redis |
 | `CACHE_TTL_SECONDS` | `60` | Коротко намеренно: окно, включающее «сейчас», ещё движется |

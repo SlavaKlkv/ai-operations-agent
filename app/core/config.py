@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     llm_max_retries: int = 2
     anthropic_api_key: SecretStr | None = None
 
+    #: Require an API token. Off only for local development — /health reports
+    #: it, so a deployment that leaves it off by accident can be noticed.
+    auth_enabled: bool = True
+
     #: Cache read-tool results between runs. Off, every investigation pays the
     #: full round trip to every external system it consults.
     cache_enabled: bool = True
