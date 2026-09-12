@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from functools import lru_cache
 
@@ -18,11 +19,14 @@ from app.api.schemas import (
     RunDetail,
     RunRequest,
     RunSummary,
+    RunTrace,
     ToolCallView,
+    TraceStep,
 )
 from app.db.base import get_session
 from app.db.models import AgentRun
 from app.domain.models import IncidentAnalysis
+from app.observability import recording
 from app.services import run_store
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -92,11 +96,15 @@ async def start_run(payload: RunRequest, session: AsyncSession = Depends(get_ses
     run = await run_store.create_run(
         session, task=payload.task, target_service=payload.target_service
     )
+    recording.record_run_started(payload.target_service)
+
+    started = time.perf_counter()
     final = await get_graph().ainvoke(
         initial_state(str(run.id), payload.task, payload.target_service),
         run_config(str(run.id)),
     )
     await run_store.persist_progress(session, run, final, pending=_interrupt_payload(final))
+    recording.record_run(final, duration_seconds=time.perf_counter() - started)
     stored = await run_store.get_run(session, run.id)
     assert stored is not None
     return _to_detail(stored)
@@ -130,6 +138,9 @@ async def decide_approval(
         decided_by=decision.decided_by,
         note=decision.note,
     )
+    recording.record_decision(approved=decision.approved)
+
+    started = time.perf_counter()
     final = await get_graph().ainvoke(
         Command(
             resume={
@@ -141,9 +152,44 @@ async def decide_approval(
         run_config(str(run.id)),
     )
     await run_store.persist_progress(session, run, final, pending=_interrupt_payload(final))
+    recording.record_run(final, duration_seconds=time.perf_counter() - started)
     stored = await run_store.get_run(session, run.id)
     assert stored is not None
     return _to_detail(stored)
+
+
+@router.get("/{run_id}/trace", response_model=RunTrace)
+async def get_trace(run_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> RunTrace:
+    """Why the agent arrived where it did.
+
+    Reconstructed from the observations every node appended as it ran, so it
+    shows the nodes visited, the tools called and the branches taken —
+    without re-running anything. Model reasoning is deliberately absent: what
+    the agent did is auditable, what it "thought" is not evidence.
+    """
+    run = await run_store.get_run(session, run_id)
+    if run is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="run not found")
+
+    snapshot = run.state_snapshot or {}
+    entries = [
+        TraceStep(
+            step=index,
+            node=str(observation.get("node", observation.get("tool", "unknown"))),
+            detail={k: v for k, v in observation.items() if k != "node"},
+        )
+        for index, observation in enumerate(snapshot.get("observations", []), start=1)
+    ]
+    return RunTrace(
+        run_id=run.id,
+        status=run.status,
+        steps=entries,
+        tool_calls=[
+            ToolCallView.model_validate(tc)
+            for tc in sorted(run.tool_calls, key=lambda t: t.started_at)
+        ],
+        errors=[str(e.get("message", "")) for e in snapshot.get("errors", [])],
+    )
 
 
 @router.get("", response_model=list[RunSummary])

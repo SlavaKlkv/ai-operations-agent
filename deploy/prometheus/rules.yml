@@ -1,0 +1,63 @@
+# Alerting rules.
+#
+# The first rule is the one that matters: a write that ran without an
+# approval is a breach of the system's central guarantee, so it pages
+# immediately rather than waiting for a rate to build up.
+
+groups:
+  - name: ai-operations-agent
+    rules:
+      - alert: UnapprovedWriteExecuted
+        expr: increase(agent_unapproved_writes_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "An agent write executed without human approval"
+          description: >-
+            {{ $labels.tool }} ran on a run that carried no approved decision.
+            The approval gate has failed; treat this as a security incident.
+
+      - alert: ApprovalsQueueStuck
+        expr: agent_runs_finished_total{status="awaiting_approval"} > 0
+          and on() increase(agent_approvals_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Investigations are waiting for a reviewer"
+          description: "Runs have been paused for an hour with no decisions recorded."
+
+      - alert: CheckpointerNotDurable
+        expr: agent_checkpointer_durable == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Paused approvals will not survive a restart"
+          description: >-
+            The agent fell back to an in-memory checkpointer. A run awaiting
+            approval is lost if the process restarts.
+
+      - alert: RequiredMCPServerDown
+        expr: agent_mcp_server_up{required="true"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A required MCP server is unreachable"
+          description: "{{ $labels.server }} has been disconnected for two minutes."
+
+      - alert: ModelUnavailable
+        expr: >-
+          increase(agent_llm_calls_total{outcome="error"}[10m]) > 0
+          and increase(agent_llm_calls_total{outcome="ok"}[10m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The agent is running on its deterministic path"
+          description: >-
+            Every model call in the last ten minutes failed. Investigations
+            still complete, but tool selection and the written analysis are
+            degraded.

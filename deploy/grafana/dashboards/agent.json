@@ -1,0 +1,214 @@
+{
+  "uid": "ai-operations-agent",
+  "title": "AI Operations Agent",
+  "description": "Investigation throughput, cost and the safety of write actions.",
+  "tags": ["agent", "llm", "incident-response"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Safety",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Unapproved writes",
+      "description": "Writes that executed with no approved decision behind them. This must stay at zero; any other value is a security incident, not a performance problem.",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        {
+          "expr": "sum(agent_unapproved_writes_total) or vector(0)",
+          "legendFormat": "unapproved",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Human decisions",
+      "description": "Approvals and rejections over time. A rejection rate that climbs means the agent is proposing writes it should not.",
+      "gridPos": { "h": 5, "w": 9, "x": 6, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "expr": "sum by (decision) (increase(agent_approvals_total[5m]))",
+          "legendFormat": "{{decision}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Durable approvals",
+      "description": "1 when a run paused for approval would survive a restart. 0 means the agent fell back to an in-memory checkpointer.",
+      "gridPos": { "h": 5, "w": 4, "x": 15, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "at risk", "color": "orange", "index": 0 },
+                "1": { "text": "durable", "color": "green", "index": 1 }
+              }
+            }
+          ]
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        { "expr": "agent_checkpointer_durable", "refId": "A" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "MCP servers up",
+      "description": "Connected integrations. A required server at zero degrades every investigation that needs it.",
+      "gridPos": { "h": 5, "w": 5, "x": 19, "y": 1 },
+      "options": { "colorMode": "value", "graphMode": "none" },
+      "targets": [
+        {
+          "expr": "sum(agent_mcp_server_up)",
+          "legendFormat": "connected",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Throughput and outcome",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Runs by outcome",
+      "description": "How investigations end. A rising 'failed' share usually means data sources are unavailable, not that the agent got worse.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 20, "stacking": { "mode": "normal" } } } },
+      "targets": [
+        {
+          "expr": "sum by (status) (increase(agent_runs_finished_total[5m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Investigation latency",
+      "description": "p50 and p95 wall-clock time per investigation, excluding time spent waiting for a human.",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 7 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(agent_run_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(agent_run_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Cost of an investigation",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tool calls per run",
+      "description": "The number that decides what an investigation costs. A climbing p95 means the agent is exploring instead of concluding.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 15 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(agent_run_tool_calls_bucket[10m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(agent_run_tool_calls_bucket[10m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tool calls by outcome",
+      "description": "Failures here are usually an unavailable backend; a tool that fails constantly is one the agent should stop being offered.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 15 },
+      "targets": [
+        {
+          "expr": "sum by (tool, outcome) (rate(agent_tool_calls_total[5m]))",
+          "legendFormat": "{{tool}} · {{outcome}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tokens consumed",
+      "description": "Input and output tokens. Flat at zero means the agent is running its deterministic path.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 15 },
+      "targets": [
+        {
+          "expr": "sum by (direction) (rate(agent_llm_tokens_total[5m]))",
+          "legendFormat": "{{direction}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Quality of conclusions",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Confidence distribution",
+      "description": "Confidence of the leading hypothesis. A population clustered just above the proposal floor is a sign of a miscalibrated agent, not a decisive one.",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 23 },
+      "fieldConfig": { "defaults": { "max": 1, "min": 0 } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(agent_run_confidence_bucket[15m])))",
+          "legendFormat": "median confidence",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Model availability",
+      "description": "Successful versus failed model calls. Failures do not stop investigations — they silently downgrade them to the deterministic path, which is why this is worth watching.",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 23 },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(agent_llm_calls_total[5m]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

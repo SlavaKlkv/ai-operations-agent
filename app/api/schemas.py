@@ -89,6 +89,24 @@ class RunDetail(RunSummary):
     action_result: dict | None = None
 
 
+class TraceStep(BaseModel):
+    """One observable thing the workflow did."""
+
+    step: int
+    node: str
+    detail: dict = Field(default_factory=dict)
+
+
+class RunTrace(BaseModel):
+    """The replayable story of a run: nodes, tools, branches and failures."""
+
+    run_id: uuid.UUID
+    status: RunStatus
+    steps: list[TraceStep] = Field(default_factory=list)
+    tool_calls: list[ToolCallView] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
 class HealthResponse(BaseModel):
     status: str
     version: str

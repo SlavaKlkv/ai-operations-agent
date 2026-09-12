@@ -8,10 +8,11 @@ import structlog
 from fastapi import FastAPI
 
 from app.agent import checkpointing
-from app.api.routes import health, integrations, runs
+from app.api.routes import health, integrations, metrics, runs
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.mcp import runtime as mcp_runtime
+from app.observability import recording
 
 log = structlog.get_logger(__name__)
 
@@ -31,6 +32,11 @@ async def lifespan(app: FastAPI):
         # than preventing the application from starting.
         pool = await mcp_runtime.startup()
         log.info("mcp.ready", healthy=pool.healthy, tools=len(pool.tools()))
+        recording.record_integration_health(
+            pool.status, durable_checkpointer=checkpointing.is_durable()
+        )
+    else:
+        recording.record_integration_health((), durable_checkpointer=checkpointing.is_durable())
     try:
         yield
     finally:
@@ -53,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(runs.router)
     app.include_router(integrations.router)
+    app.include_router(metrics.router)
     return app
 
 

@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 VENV := .venv/bin
 
-.PHONY: help install up down migrate run test eval lint format check clean
+.PHONY: help install up down observability migrate run test eval lint format check clean
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -13,8 +13,13 @@ install:  ## Create the virtualenv and install the project with dev extras
 up:  ## Start PostgreSQL and Redis
 	docker compose up -d postgres redis
 
+observability:  ## Start the full stack with Prometheus and Grafana
+	docker compose --profile observability up -d
+	@echo "Grafana  http://localhost:$${GRAFANA_PORT:-3000}/d/ai-operations-agent"
+	@echo "Metrics  http://localhost:8000/metrics"
+
 down:  ## Stop the stack
-	docker compose down
+	docker compose --profile observability down
 
 migrate:  ## Apply database migrations
 	$(VENV)/alembic upgrade head
