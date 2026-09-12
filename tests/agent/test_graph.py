@@ -5,7 +5,7 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage
 
 from app.adapters.mock.dataset import INCIDENT_START
-from app.agent.graph import build_graph, has_enough_context
+from app.agent.graph import build_graph, has_enough_context, run_config
 from app.agent.guardrails import Guardrails
 from app.agent.llm import ScriptedChatModel
 from app.agent.nodes.investigate import MAX_LOOP_ITERATIONS
@@ -32,11 +32,15 @@ def test_routing_short_circuits_on_failure():
 
 
 async def test_full_run_identifies_the_release(monitoring, code, logs, fresh_state):
+    """A confident run does not finish on its own: it stops to ask."""
     graph = build_graph(monitoring=monitoring, code=code, logs=logs)
-    final = await graph.ainvoke(fresh_state)
+    final = await graph.ainvoke(fresh_state, run_config(fresh_state["run_id"]))
 
-    assert final["status"] is RunStatus.COMPLETED
-    assert final["current_step"] == "final_response"
+    assert final["__interrupt__"], "a write was proposed, so the graph must pause"
+    assert final["current_step"] == "propose_action", (
+        "the pause happens inside request_approval, so the last completed step "
+        "is the one that produced the proposal"
+    )
     analysis = final["analysis"]
     assert analysis.service == "billing-service"
     assert analysis.incident_start == INCIDENT_START
@@ -48,7 +52,7 @@ async def test_full_run_identifies_the_release(monitoring, code, logs, fresh_sta
 async def test_every_claim_is_backed_by_a_tool_call(monitoring, code, logs, fresh_state):
     """Evidence grounding: no evidence item may cite a tool that never ran."""
     graph = build_graph(monitoring=monitoring, code=code, logs=logs)
-    final = await graph.ainvoke(fresh_state)
+    final = await graph.ainvoke(fresh_state, run_config(fresh_state["run_id"]))
 
     executed = {r.tool for r in final["tool_calls"]} | {"detect_spike"}
     cited = {e.source_tool for e in final["analysis"].evidence}
@@ -57,14 +61,16 @@ async def test_every_claim_is_backed_by_a_tool_call(monitoring, code, logs, fres
 
 async def test_run_stays_within_its_budget(monitoring, code, logs, fresh_state):
     graph = build_graph(monitoring=monitoring, code=code, logs=logs)
-    final = await graph.ainvoke(fresh_state)
+    final = await graph.ainvoke(fresh_state, run_config(fresh_state["run_id"]))
     assert final["tool_call_count"] <= 12
     assert final["step_count"] <= 30
 
 
 async def test_unknown_service_ends_in_a_stated_failure(monitoring, code, logs):
     graph = build_graph(monitoring=monitoring, code=code, logs=logs)
-    final = await graph.ainvoke(initial_state("r1", "что-то не так с payments-service"))
+    final = await graph.ainvoke(
+        initial_state("r1", "что-то не так с payments-service"), run_config("r1")
+    )
 
     assert final["status"] is RunStatus.FAILED
     assert final["current_step"] == "insufficient_context"
@@ -74,7 +80,7 @@ async def test_unknown_service_ends_in_a_stated_failure(monitoring, code, logs):
 
 async def test_failure_path_records_why(monitoring, code, logs):
     graph = build_graph(monitoring=monitoring, code=code, logs=logs)
-    final = await graph.ainvoke(initial_state("r2", "no service named here"))
+    final = await graph.ainvoke(initial_state("r2", "no service named here"), run_config("r2"))
     assert final["errors"]
     assert final["errors"][0].kind == "insufficient_input"
 
@@ -118,10 +124,10 @@ async def test_the_model_can_add_a_tool_call_and_then_conclude(monitoring, code,
         ]
     )
     final = await build_graph(monitoring=monitoring, code=code, logs=logs, model=model).ainvoke(
-        fresh_state
+        fresh_state, run_config(fresh_state["run_id"])
     )
 
-    assert final["status"] is RunStatus.COMPLETED
+    assert final["__interrupt__"]
     assert final["loop_iterations"] == 1
     assert "get_pull_request" in [c.tool for c in final["tool_calls"]]
     assert final["analysis"].summary.startswith("billing-service v1.8.4")
@@ -148,7 +154,7 @@ async def test_a_model_that_cites_evidence_it_never_saw_loses_the_citation(
         ]
     )
     final = await build_graph(monitoring=monitoring, code=code, logs=logs, model=model).ainvoke(
-        fresh_state
+        fresh_state, run_config(fresh_state["run_id"])
     )
 
     cause = final["analysis"].suspected_causes[0]
@@ -162,7 +168,7 @@ async def test_the_evidence_list_is_never_authored_by_the_model(
 ):
     model = ScriptedChatModel(responses=[AIMessage(content="Enough."), _draft_call()])
     final = await build_graph(monitoring=monitoring, code=code, logs=logs, model=model).ainvoke(
-        fresh_state
+        fresh_state, run_config(fresh_state["run_id"])
     )
 
     executed = {r.tool for r in final["tool_calls"]} | {"detect_spike"}
@@ -175,10 +181,9 @@ async def test_a_model_outage_degrades_the_run_instead_of_failing_it(
     """Both model calls fail. The run must still produce a grounded analysis."""
     model = ScriptedChatModel(responses=[])
     final = await build_graph(monitoring=monitoring, code=code, logs=logs, model=model).ainvoke(
-        fresh_state
+        fresh_state, run_config(fresh_state["run_id"])
     )
 
-    assert final["status"] is RunStatus.COMPLETED
     assert final["analysis"] is not None
     assert "v1.8.4" in final["analysis"].suspected_causes[0].statement
     assert {e.kind for e in final["errors"]} == {"planner_failed", "llm_failed"}
@@ -210,9 +215,8 @@ async def test_a_looping_model_is_stopped_by_the_iteration_ceiling(
         logs=logs,
         model=model,
         guardrails=Guardrails(max_tool_calls=12),
-    ).ainvoke(fresh_state)
+    ).ainvoke(fresh_state, run_config(fresh_state["run_id"]))
 
-    assert final["status"] is RunStatus.COMPLETED
     assert final["loop_iterations"] <= MAX_LOOP_ITERATIONS
     assert final["tool_call_count"] <= 12
 
@@ -220,7 +224,7 @@ async def test_a_looping_model_is_stopped_by_the_iteration_ceiling(
 async def test_use_llm_false_forces_the_deterministic_baseline(monitoring, code, logs, fresh_state):
     """The evaluation harness needs a baseline that ignores configuration."""
     final = await build_graph(monitoring=monitoring, code=code, logs=logs, use_llm=False).ainvoke(
-        fresh_state
+        fresh_state, run_config(fresh_state["run_id"])
     )
     assert final["llm_calls"] == 0
     assert final["analysis"] is not None

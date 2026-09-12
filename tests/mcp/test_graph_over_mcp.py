@@ -17,8 +17,8 @@ from app.adapters.mcp_backed import (
     MCPMonitoringProvider,
     RemoteDataError,
 )
-from app.agent.graph import build_graph
-from app.agent.state import RunStatus, initial_state
+from app.agent.graph import build_graph, run_config
+from app.agent.state import initial_state
 from app.mcp.client import MCPToolPool
 from app.mcp.config import ServerSpec, Transport
 from app.mcp_servers.code import build_server as build_code_server
@@ -57,12 +57,11 @@ def over_mcp(pool):
 async def test_the_investigation_reaches_the_same_conclusion_over_mcp(
     over_mcp, monitoring, code, logs, fresh_state
 ):
-    remote = await over_mcp.ainvoke(fresh_state)
+    remote = await over_mcp.ainvoke(fresh_state, run_config(fresh_state["run_id"]))
     local = await build_graph(monitoring=monitoring, code=code, logs=logs, use_llm=False).ainvoke(
-        initial_state("local", fresh_state["task"])
+        initial_state("local", fresh_state["task"]), run_config("local")
     )
 
-    assert remote["status"] is RunStatus.COMPLETED
     assert remote["analysis"].summary == local["analysis"].summary
     assert remote["analysis"].confidence == local["analysis"].confidence
     assert [c.tool for c in remote["tool_calls"]] == [c.tool for c in local["tool_calls"]]
@@ -71,7 +70,7 @@ async def test_the_investigation_reaches_the_same_conclusion_over_mcp(
 async def test_the_agents_tool_names_are_its_own_not_the_servers(over_mcp, fresh_state):
     """The registry is not generated from what the servers advertise, so a
     server cannot widen the agent's reach by editing its own manifest."""
-    final = await over_mcp.ainvoke(fresh_state)
+    final = await over_mcp.ainvoke(fresh_state, run_config(fresh_state["run_id"]))
     assert {c.tool for c in final["tool_calls"]} <= {
         "get_service_metrics",
         "get_recent_deployments",
@@ -129,7 +128,7 @@ async def test_losing_the_optional_server_does_not_change_the_conclusion(
     scenario, fresh_state, over_mcp
 ):
     """Knowledge is declared optional; the investigation must survive without it."""
-    baseline = await over_mcp.ainvoke(fresh_state)
+    baseline = await over_mcp.ainvoke(fresh_state, run_config(fresh_state["run_id"]))
 
     def broken() -> object:
         raise RuntimeError("knowledge server is down")
@@ -147,9 +146,10 @@ async def test_losing_the_optional_server_does_not_change_the_conclusion(
             logs=MCPLogProvider(degraded),
             use_llm=False,
         )
-        final = await graph.ainvoke(initial_state("degraded", fresh_state["task"]))
+        final = await graph.ainvoke(
+            initial_state("degraded", fresh_state["task"]), run_config("degraded")
+        )
 
-    assert final["status"] is RunStatus.COMPLETED
     assert final["analysis"].summary == baseline["analysis"].summary
 
 

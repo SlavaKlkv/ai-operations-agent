@@ -25,6 +25,7 @@ def offline(monkeypatch):
     run the suite against a paid API — slowly, nondeterministically, and with
     results that differ from CI. Tests that want a model inject a scripted one.
     """
+    from app.api.routes.runs import get_graph
     from app.core.config import get_settings
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -33,9 +34,15 @@ def offline(monkeypatch):
     # for no gain: the integration layer has its own tests, which connect a
     # real client to a real server in-process.
     monkeypatch.setenv("MCP_ENABLED", "false")
+    monkeypatch.setenv("CHECKPOINTER", "memory")
     get_settings.cache_clear()
+    # The API compiles one graph per process and caches it. That graph holds
+    # the mock issue tracker, whose contents would otherwise leak from one
+    # test into the next — a duplicate-title refusal in an unrelated test.
+    get_graph.cache_clear()
     yield
     get_settings.cache_clear()
+    get_graph.cache_clear()
 
 
 @pytest.fixture
@@ -73,6 +80,11 @@ async def db_session():
     """
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+    # Importing the models is what populates Base.metadata. Relying on some
+    # other module to have imported them first makes table creation depend on
+    # test collection order, which is how this fixture silently produced an
+    # empty database.
+    import app.db.models  # noqa: F401
     from app.db.base import Base
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
