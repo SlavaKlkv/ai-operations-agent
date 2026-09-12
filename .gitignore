@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Runtime artifacts
+*.db
+*.sqlite3
+logs/
+data/local/
+
+# Agent instructions (local only)
+CLAUDE.md
+AGENTS.md
+TASK.md
+.claude/
