@@ -46,6 +46,24 @@ jobs:
           name: coverage
           path: coverage.xml
 
+  evaluate:
+    name: Agent evaluation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: uv sync --locked --extra dev
+      - name: Evaluate the deterministic agent
+        # A regression in the planner, the correlation or the analysis shows
+        # up here as a failing scenario rather than in a demo.
+        env:
+          MCP_ENABLED: "false"
+          CHECKPOINTER: memory
+        run: uv run python -m app.evaluation --quiet
+
   docker:
     name: Docker image builds
     runs-on: ubuntu-latest

@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 VENV := .venv/bin
 
-.PHONY: help install up down migrate run test lint format check clean
+.PHONY: help install up down migrate run test eval lint format check clean
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -25,6 +25,9 @@ run:  ## Run the API with autoreload
 test:  ## Run the test suite with coverage
 	$(VENV)/pytest --cov=app --cov-report=term-missing
 
+eval:  ## Run the agent evaluation suite
+	MCP_ENABLED=false CHECKPOINTER=memory $(VENV)/python -m app.evaluation --quiet
+
 lint:  ## Lint and type-check
 	$(VENV)/ruff check .
 	$(VENV)/ruff format --check .
@@ -33,7 +36,7 @@ format:  ## Auto-fix formatting and lint issues
 	$(VENV)/ruff check --fix .
 	$(VENV)/ruff format .
 
-check: lint test  ## Everything CI runs
+check: lint test eval  ## Everything CI runs
 
 clean:  ## Remove caches and build artefacts
 	rm -rf .pytest_cache .ruff_cache .mypy_cache htmlcov coverage.xml
