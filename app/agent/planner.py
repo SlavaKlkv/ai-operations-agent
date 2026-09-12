@@ -95,10 +95,22 @@ class HeuristicPlanner:
         if not service:
             return Plan(rationale="no target service was resolved, so nothing can be queried")
 
+        # A rule fires on a gap in the *context*, but a tool that returned
+        # nothing leaves that gap open — there simply were no alerts, or no
+        # commits in the window. Without this the planner would ask again on
+        # every iteration until the budget stopped it, which is the single
+        # most expensive way an agent can be wrong.
+        attempted = {call.tool for call in state.get("tool_calls", [])}
+
         for request, reason in self._candidates(service, context):
-            if request.tool in names:
+            if request.tool in names and request.tool not in attempted:
                 return Plan(requests=(request,), rationale=reason)
-        return Plan(rationale="the collected evidence covers metrics, deployments, logs and alerts")
+        return Plan(
+            rationale=(
+                "every source that could close a gap has been queried; "
+                "what is missing is absent, not unfetched"
+            )
+        )
 
     @staticmethod
     def _candidates(service: str, context: CollectedContext):

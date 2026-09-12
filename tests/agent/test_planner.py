@@ -100,7 +100,7 @@ async def test_heuristic_stops_when_nothing_is_missing(monitoring, code, logs):
     )
     plan = await HeuristicPlanner().plan(_state(context=context), _tools(monitoring, code, logs))
     assert plan.is_done
-    assert "covers metrics" in plan.rationale
+    assert "has been queried" in plan.rationale
 
 
 async def test_heuristic_never_asks_for_a_tool_it_was_not_offered(monitoring, code, logs):

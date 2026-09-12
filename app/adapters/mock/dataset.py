@@ -258,3 +258,148 @@ def aggregate_logs(
         if len(events) >= min_count
     ]
     return sorted(groups, key=lambda g: g.count, reverse=True)
+
+
+# ── A second incident: a dependency, not a release ───────────────────────────
+
+
+def _gateway_logs() -> list[LogEvent]:
+    logs: list[LogEvent] = []
+    cursor = _at(14, 20)
+    while cursor <= _at(15, 0):
+        for _ in range(4):
+            logs.append(
+                LogEvent(
+                    timestamp=cursor,
+                    service="checkout-service",
+                    level=LogLevel.ERROR,
+                    message="Upstream inventory service did not respond in time",
+                    error_type="GatewayTimeout",
+                    stack_top="checkout/inventory_client.py:88 in reserve",
+                )
+            )
+        cursor += timedelta(minutes=2)
+    return logs
+
+
+#: Errors rise with no deployment anywhere near the window, and latency rises
+#: with them while request rate stays flat. A correct agent reports that no
+#: release explains it; an agent that pattern-matches "errors → blame the last
+#: deploy" gets this one wrong, which is the point of including it.
+CHECKOUT_DEPENDENCY = Scenario(
+    name="checkout-dependency-degradation",
+    deployments=[
+        Deployment(
+            service="checkout-service",
+            version="v4.2.0",
+            deployed_at=_at(6, 5),  # eight hours before the incident
+            commit_sha="b1d0f7c93ea4526d8c0f1a7b45e9d2c86f3a01bb",
+            deployed_by="ci-bot",
+        ),
+    ],
+    commits=[
+        Commit(
+            sha="b1d0f7c93ea4526d8c0f1a7b45e9d2c86f3a01bb",
+            message="chore(deps): bump http client to 2.9.1",
+            author="m.sokolov",
+            committed_at=_at(5, 40),
+            files=(ChangedFile(path="pyproject.toml", additions=1, deletions=1),),
+        ),
+    ],
+    pull_requests=[],
+    alerts=[
+        Alert(
+            name="HighErrorRate",
+            service="checkout-service",
+            severity=AlertSeverity.CRITICAL,
+            fired_at=_at(14, 26),
+            description="5xx ratio above 5% for 3 minutes",
+        ),
+    ],
+    logs=_gateway_logs(),
+    metrics={
+        ("checkout-service", "error_rate"): _series(
+            "checkout-service",
+            "error_rate",
+            "ratio",
+            baseline=0.003,
+            spike=0.082,
+            spike_from=_at(14, 20),
+        ),
+        ("checkout-service", "request_rate"): _series(
+            "checkout-service",
+            "request_rate",
+            "rps",
+            baseline=180.0,
+            spike=178.0,
+            spike_from=_at(14, 20),
+        ),
+        ("checkout-service", "latency_p99"): _series(
+            "checkout-service",
+            "latency_p99",
+            "seconds",
+            baseline=0.35,
+            spike=2.90,
+            spike_from=_at(14, 20),
+        ),
+    },
+)
+
+
+# ── A third case: nothing is wrong ───────────────────────────────────────────
+
+#: A healthy service. The agent is asked to investigate anyway, because that
+#: is what an on-call engineer does with a false report — and the right answer
+#: is "I found nothing", not a plausible-sounding cause.
+SEARCH_HEALTHY = Scenario(
+    name="search-service-no-incident",
+    deployments=[
+        Deployment(
+            service="search-service",
+            version="v3.1.0",
+            deployed_at=_at(14, 30),
+            commit_sha="7c3a5e91bb2d4408ffe6c1027d5a39b84ee20cd1",
+            deployed_by="ci-bot",
+        ),
+    ],
+    commits=[
+        Commit(
+            sha="7c3a5e91bb2d4408ffe6c1027d5a39b84ee20cd1",
+            message="feat(search): add fuzzy matching for product names",
+            author="k.orlova",
+            committed_at=_at(13, 55),
+            files=(ChangedFile(path="search/query.py", additions=48, deletions=6),),
+        ),
+    ],
+    pull_requests=[],
+    alerts=[],
+    logs=[],
+    metrics={
+        ("search-service", "error_rate"): _series(
+            "search-service",
+            "error_rate",
+            "ratio",
+            baseline=0.002,
+            spike=0.002,
+            spike_from=_at(14, 30),
+        ),
+        ("search-service", "request_rate"): _series(
+            "search-service",
+            "request_rate",
+            "rps",
+            baseline=95.0,
+            spike=96.0,
+            spike_from=_at(14, 30),
+        ),
+        ("search-service", "latency_p99"): _series(
+            "search-service",
+            "latency_p99",
+            "seconds",
+            baseline=0.21,
+            spike=0.22,
+            spike_from=_at(14, 30),
+        ),
+    },
+)
+
+SCENARIOS = {s.name: s for s in (BILLING_5XX, CHECKOUT_DEPENDENCY, SEARCH_HEALTHY)}
