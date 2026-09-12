@@ -55,6 +55,9 @@ class ToolCallRecord(BaseModel):
     error: str | None = None
     result_summary: str = ""
     attempt: int = 1
+    #: True when the result came from the cache rather than the provider.
+    #: Kept on the record so evaluation can tell a cheap run from a fast one.
+    cached: bool = False
 
 
 class ProposedAction(BaseModel):

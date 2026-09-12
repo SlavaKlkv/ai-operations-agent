@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     llm_max_retries: int = 2
     anthropic_api_key: SecretStr | None = None
 
+    #: Cache read-tool results between runs. Off, every investigation pays the
+    #: full round trip to every external system it consults.
+    cache_enabled: bool = True
+    #: Short on purpose: a window that includes "now" is still moving.
+    cache_ttl_seconds: int = 60
+
     #: Where paused runs are kept. "postgres" is the only durable option;
     #: "memory" is for tests and single-process demos.
     checkpointer: Literal["postgres", "memory"] = "postgres"

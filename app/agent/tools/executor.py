@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from pydantic import BaseModel
 
 from app.agent.guardrails import Guardrails, GuardrailViolation
@@ -31,6 +32,9 @@ from app.agent.tools.base import (
     UnknownToolError,
     call_signature,
 )
+from app.services.cache import NullCache, ToolCache, cache_key
+
+log = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,10 +70,14 @@ class ToolExecutor:
         guardrails: Guardrails,
         *,
         history: Sequence[str] = (),
+        cache: ToolCache | None = None,
+        cache_ttl: int = 60,
     ) -> None:
         self._registry = registry
         self._guardrails = guardrails
         self._history: list[str] = list(history)
+        self._cache = cache or NullCache()
+        self._cache_ttl = cache_ttl
 
     @classmethod
     def resume(
@@ -77,6 +85,9 @@ class ToolExecutor:
         registry: ToolRegistry,
         guardrails: Guardrails,
         records: Iterable[ToolCallRecord],
+        *,
+        cache: ToolCache | None = None,
+        cache_ttl: int = 60,
     ) -> ToolExecutor:
         """Rebuild an executor mid-run from what the state already records.
 
@@ -89,6 +100,8 @@ class ToolExecutor:
             registry,
             guardrails,
             history=[call_signature(r.tool, r.arguments) for r in records],
+            cache=cache,
+            cache_ttl=cache_ttl,
         )
 
     @property
@@ -147,6 +160,33 @@ class ToolExecutor:
         except InvalidToolArgumentsError as exc:
             return self._refused(request, exc)
 
+        # Reads only. A write has an effect, and an effect cannot be served
+        # from a cache — the access class decides, not the tool's name.
+        key = cache_key(tool.name, arguments) if not tool.is_write else None
+        if key is not None and (cached := await self._cache.get(key)) is not None:
+            try:
+                validated = tool.parse_result(cached)
+            except ToolError:
+                # A cached value that no longer fits the schema means the tool
+                # changed shape; fall through and fetch it properly.
+                log.info("cache.stale_shape", tool=tool.name)
+            else:
+                digest = tool.digest(validated)
+                return ToolInvocation(
+                    request=request,
+                    record=ToolCallRecord(
+                        tool=tool.name,
+                        arguments=arguments,
+                        started_at=datetime.now(UTC),
+                        duration_ms=0.0,
+                        ok=True,
+                        result_summary=digest[:500],
+                        cached=True,
+                    ),
+                    result=validated,
+                    digest=digest,
+                )
+
         outcome = await call_tool(
             tool.name,
             lambda: tool.handler(parsed),
@@ -161,6 +201,9 @@ class ToolExecutor:
             validated = tool.parse_result(outcome.value)
         except ToolError as exc:
             return self._refused(request, exc, duration_ms=outcome.record.duration_ms)
+
+        if key is not None:
+            await self._cache.set(key, validated.model_dump(mode="json"), ttl=self._cache_ttl)
 
         digest = tool.digest(validated)
         record = outcome.record.model_copy(update={"result_summary": digest[:500]})

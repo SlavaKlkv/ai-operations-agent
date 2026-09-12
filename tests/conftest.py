@@ -35,6 +35,7 @@ def offline(monkeypatch):
     # real client to a real server in-process.
     monkeypatch.setenv("MCP_ENABLED", "false")
     monkeypatch.setenv("CHECKPOINTER", "memory")
+    monkeypatch.setenv("CACHE_ENABLED", "false")
     get_settings.cache_clear()
     # The API compiles one graph per process and caches it. That graph holds
     # the mock issue tracker, whose contents would otherwise leak from one

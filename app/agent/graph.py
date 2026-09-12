@@ -94,6 +94,7 @@ from app.agent.planner import HeuristicPlanner, LLMPlanner, Planner
 from app.agent.serde import agent_serializer
 from app.agent.state import AgentState, ApprovalState, RunStatus
 from app.agent.tools.catalog import build_registry
+from app.services.cache import ToolCache
 
 
 def run_config(run_id: str) -> dict[str, dict[str, str]]:
@@ -171,6 +172,7 @@ def build_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     planner: Planner | None = None,
     guardrails: Guardrails | None = None,
+    cache: ToolCache | None = None,
     use_llm: bool = True,
 ):
     """Compile the workflow.
@@ -206,7 +208,7 @@ def build_graph(
     )
     builder.add_node("correlate", make_correlate_node(code, timeout=timeout))
     builder.add_node("select_tool", make_select_tool_node(planner, registry, guardrails))
-    builder.add_node("execute_tool", make_execute_tool_node(registry, guardrails))
+    builder.add_node("execute_tool", make_execute_tool_node(registry, guardrails, cache=cache))
     builder.add_node("evaluate_observation", evaluate_observation_node)
     builder.add_node("generate_analysis", make_build_analysis_node(model))
     builder.add_node("propose_action", propose_action_node)

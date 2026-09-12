@@ -23,11 +23,13 @@ from app.api.schemas import (
     ToolCallView,
     TraceStep,
 )
+from app.core.config import get_settings
 from app.db.base import get_session
 from app.db.models import AgentRun
 from app.domain.models import IncidentAnalysis
 from app.observability import recording
 from app.services import run_store
+from app.services.cache import build_cache
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -41,7 +43,11 @@ def get_graph():
     serves concurrent requests safely. Compiling per request would also mean
     re-reading credentials and rebuilding the registry on every investigation.
     """
-    return build_graph(checkpointer=get_saver())
+    settings = get_settings()
+    return build_graph(
+        checkpointer=get_saver(),
+        cache=build_cache(settings),
+    )
 
 
 def _to_detail(run: AgentRun) -> RunDetail:

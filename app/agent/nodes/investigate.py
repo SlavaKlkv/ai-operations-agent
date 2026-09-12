@@ -33,6 +33,7 @@ from app.agent.tools.schemas import (
     PullRequestResult,
 )
 from app.domain.models import Evidence, EvidenceKind
+from app.services.cache import ToolCache
 
 log = structlog.get_logger(__name__)
 
@@ -126,12 +127,24 @@ def route_after_selection(state: AgentState) -> Literal["execute_tool", "generat
 # ── execute_tool ─────────────────────────────────────────────────────────────
 
 
-def make_execute_tool_node(registry: ToolRegistry, guardrails: Guardrails):
+def make_execute_tool_node(
+    registry: ToolRegistry,
+    guardrails: Guardrails,
+    *,
+    cache: ToolCache | None = None,
+    cache_ttl: int = 60,
+):
     """Run what the planner asked for, under policy, and absorb the results."""
 
     async def execute_tool_node(state: AgentState) -> AgentState:
         requests: list[ToolRequest] = list(state.get("pending_requests") or [])
-        executor = ToolExecutor.resume(registry, guardrails, state.get("tool_calls", []))
+        executor = ToolExecutor.resume(
+            registry,
+            guardrails,
+            state.get("tool_calls", []),
+            cache=cache,
+            cache_ttl=cache_ttl,
+        )
         defaults = _window_defaults(state)
 
         # Copy-on-write: LangGraph merges returned values, and mutating the
