@@ -52,12 +52,45 @@ class RunSummary(BaseModel):
     final_result: str | None = None
 
 
+class PendingApproval(BaseModel):
+    """The write a run is waiting on. Shown in full: a reviewer approves
+    content, not a description of content."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    approval_id: uuid.UUID
+    tool: str
+    arguments: dict
+    rationale: str = ""
+
+
+class ApprovalDecision(BaseModel):
+    """A human decision. Carries no action — only a yes or a no.
+
+    Deliberately unable to express *what* to do: the action is whatever the
+    graph checkpointed, so an approval cannot be redirected onto content the
+    reviewer never saw.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    approved: bool
+    decided_by: str = Field(
+        min_length=3, max_length=320, description="Who is making this decision."
+    )
+    note: str = Field(default="", max_length=2000, description="Why, for the audit trail.")
+
+
 class RunDetail(RunSummary):
     analysis: IncidentAnalysis | None = None
     tool_calls: list[ToolCallView] = Field(default_factory=list)
+    pending_approval: PendingApproval | None = None
+    approved_by: str | None = None
+    action_result: dict | None = None
 
 
 class HealthResponse(BaseModel):
     status: str
     version: str
     environment: str
+    durable_approvals: bool = False

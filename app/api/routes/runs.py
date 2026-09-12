@@ -6,11 +6,20 @@ import uuid
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.graph import build_graph
-from app.agent.state import initial_state
-from app.api.schemas import RunDetail, RunRequest, RunSummary, ToolCallView
+from app.agent.checkpointing import get_saver
+from app.agent.graph import build_graph, run_config
+from app.agent.state import ApprovalState, RunStatus, initial_state
+from app.api.schemas import (
+    ApprovalDecision,
+    PendingApproval,
+    RunDetail,
+    RunRequest,
+    RunSummary,
+    ToolCallView,
+)
 from app.db.base import get_session
 from app.db.models import AgentRun
 from app.domain.models import IncidentAnalysis
@@ -28,7 +37,7 @@ def get_graph():
     serves concurrent requests safely. Compiling per request would also mean
     re-reading credentials and rebuilding the registry on every investigation.
     """
-    return build_graph()
+    return build_graph(checkpointer=get_saver())
 
 
 def _to_detail(run: AgentRun) -> RunDetail:
@@ -38,25 +47,100 @@ def _to_detail(run: AgentRun) -> RunDetail:
     detail.tool_calls = [
         ToolCallView.model_validate(tc) for tc in sorted(run.tool_calls, key=lambda t: t.started_at)
     ]
+    # The approval row, not the graph state, is what the API reports: it is
+    # the record that authorised the action, and it outlives the checkpoint.
+    pending = next((a for a in run.approvals if a.state is ApprovalState.PENDING), None)
+    if pending is not None:
+        detail.pending_approval = PendingApproval(
+            approval_id=pending.id,
+            tool=pending.tool,
+            arguments=pending.arguments,
+            rationale=pending.rationale,
+        )
+
+    decided = next((a for a in run.approvals if a.decided_at is not None), None)
+    if decided is not None:
+        detail.approved_by = decided.decided_by
+        detail.action_result = decided.execution_result
     return detail
+
+
+def _interrupt_payload(final: dict) -> dict | None:
+    """What the graph is waiting for, if it paused.
+
+    LangGraph reports a pause by putting the interrupt payload on the returned
+    state rather than by raising, so a caller that ignores this key silently
+    treats a half-finished run as a finished one.
+    """
+    interrupts = final.get("__interrupt__") or ()
+    return interrupts[0].value if interrupts else None
 
 
 @router.post("", response_model=RunDetail, status_code=status.HTTP_201_CREATED)
 async def start_run(payload: RunRequest, session: AsyncSession = Depends(get_session)) -> RunDetail:
     """Start an investigation and return its terminal state.
 
-    The run executes inline: V1 workflows finish in well under a second against
-    mock providers, and a synchronous answer keeps the API honest about how
-    long an investigation actually takes. Long-running variants move to Celery
-    once real integrations make that true.
+    The run executes inline: an investigation against mock or in-process
+    providers finishes in well under a second, and a synchronous answer keeps
+    the API honest about how long one actually takes.
+
+    "Terminal" includes *paused*. If the agent proposed a write, the graph
+    stops at the approval gate and this returns a run whose status is
+    ``awaiting_approval`` with the exact content awaiting review; the decision
+    arrives as a separate request to ``POST /runs/{id}/approval``.
     """
     run = await run_store.create_run(
         session, task=payload.task, target_service=payload.target_service
     )
     final = await get_graph().ainvoke(
-        initial_state(str(run.id), payload.task, payload.target_service)
+        initial_state(str(run.id), payload.task, payload.target_service),
+        run_config(str(run.id)),
     )
-    await run_store.persist_final_state(session, run, final)
+    await run_store.persist_progress(session, run, final, pending=_interrupt_payload(final))
+    stored = await run_store.get_run(session, run.id)
+    assert stored is not None
+    return _to_detail(stored)
+
+
+@router.post("/{run_id}/approval", response_model=RunDetail)
+async def decide_approval(
+    run_id: uuid.UUID,
+    decision: ApprovalDecision,
+    session: AsyncSession = Depends(get_session),
+) -> RunDetail:
+    """Approve or reject the write the run is waiting on, and resume it.
+
+    The decision does not carry the action. What gets executed is what the
+    graph checkpointed when it paused, so an approval cannot be redirected
+    onto different content than the reviewer was shown — this request says
+    yes or no, and nothing more.
+    """
+    run = await run_store.get_run(session, run_id)
+    if run is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="run not found")
+    if run.status is not RunStatus.AWAITING_APPROVAL:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=f"run is {run.status}, not awaiting approval"
+        )
+
+    await run_store.record_decision(
+        session,
+        run,
+        approved=decision.approved,
+        decided_by=decision.decided_by,
+        note=decision.note,
+    )
+    final = await get_graph().ainvoke(
+        Command(
+            resume={
+                "approved": decision.approved,
+                "decided_by": decision.decided_by,
+                "note": decision.note,
+            }
+        ),
+        run_config(str(run.id)),
+    )
+    await run_store.persist_progress(session, run, final, pending=_interrupt_payload(final))
     stored = await run_store.get_run(session, run.id)
     assert stored is not None
     return _to_detail(stored)
