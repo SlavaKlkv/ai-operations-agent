@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     llm_max_retries: int = 2
     anthropic_api_key: SecretStr | None = None
 
+    #: Where paused runs are kept. "postgres" is the only durable option;
+    #: "memory" is for tests and single-process demos.
+    checkpointer: Literal["postgres", "memory"] = "postgres"
+
     # ── MCP integration layer ────────────────────────────────────────────────
     #: Off in tests and for a minimal deployment: the agent then runs against
     #: in-process mock providers instead of four MCP servers.

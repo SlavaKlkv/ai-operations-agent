@@ -18,7 +18,16 @@ The shape of the workflow is the design document. Reading it should answer
     evaluate_observation ──(more to learn)──→ select_tool  │
       └──(enough / out of budget)─────────────────────────→ generate_analysis
                                                              ↓
-                                                           final_response → END
+                                                        propose_action
+                                                             ↓
+                        ┌──(nothing worth writing)───────────┤
+                        ↓                                    ↓ (write proposed)
+                  final_response ←──(rejected)──────── request_approval
+                        ↑                              ** graph pauses here **
+                        │                                    ↓ (approved)
+                        └──────────────────────────── execute_action
+                        ↓
+                       END
 
 Three properties hold by construction, not by instruction:
 
@@ -33,6 +42,11 @@ progress; the planner can only ever shorten the loop, never extend it.
 *The model is optional.* Pass no chat model and every node still runs, using
 its deterministic counterpart. That is what makes the graph testable and what
 makes a provider outage a degradation rather than an outage.
+
+*Nothing outside the system changes without a person.* The only write in the
+graph sits behind ``request_approval``, which interrupts execution. The pause
+is durable — the checkpointer persists the state — so the decision is a
+separate HTTP request from a separate human, not a callback held in memory.
 """
 
 from __future__ import annotations
@@ -40,16 +54,31 @@ from __future__ import annotations
 from typing import Literal
 
 from langchain_core.language_models.chat_models import BaseChatModel
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from app.adapters.base import CodeProvider, LogProvider, MonitoringProvider
+from app.adapters.base import (
+    CodeProvider,
+    IssueProvider,
+    LogProvider,
+    MonitoringProvider,
+)
 from app.adapters.mock.providers import (
     MockCodeProvider,
+    MockIssueProvider,
     MockLogProvider,
     MockMonitoringProvider,
 )
 from app.agent.guardrails import Guardrails
 from app.agent.llm import build_chat_model
+from app.agent.nodes.act import (
+    make_execute_action_node,
+    propose_action_node,
+    request_approval_node,
+    route_after_approval,
+    route_after_proposal,
+)
 from app.agent.nodes.analyze_task import analyze_task_node
 from app.agent.nodes.build_analysis import make_build_analysis_node
 from app.agent.nodes.collect_context import make_collect_context_node
@@ -62,8 +91,19 @@ from app.agent.nodes.investigate import (
     route_after_selection,
 )
 from app.agent.planner import HeuristicPlanner, LLMPlanner, Planner
-from app.agent.state import AgentState, RunStatus
+from app.agent.serde import agent_serializer
+from app.agent.state import AgentState, ApprovalState, RunStatus
 from app.agent.tools.catalog import build_registry
+
+
+def run_config(run_id: str) -> dict[str, dict[str, str]]:
+    """Checkpoint thread for one run.
+
+    The run id is the thread id, so resuming after an approval resumes *that*
+    investigation and cannot be pointed at another one by a caller who guesses
+    a different identifier.
+    """
+    return {"configurable": {"thread_id": run_id}}
 
 
 def has_enough_context(state: AgentState) -> Literal["correlate", "insufficient_context"]:
@@ -93,12 +133,31 @@ async def insufficient_context_node(state: AgentState) -> AgentState:
 
 
 async def finalize_node(state: AgentState) -> AgentState:
+    """One sentence describing how the run ended, including what it did not do.
+
+    A run that proposed an action and was refused must say so: silence would
+    read as "nothing was worth doing", which is a different outcome.
+    """
     analysis = state.get("analysis")
+    summary = analysis.summary if analysis else "No analysis was produced."
+    approval = state.get("approval_state")
+    result = state.get("action_result") or {}
+
+    if approval is ApprovalState.REJECTED:
+        note = state.get("approval_note") or ""
+        summary += " The proposed issue was not created: a reviewer declined it."
+        summary += f" Reason given: {note}" if note else ""
+    elif approval is ApprovalState.APPROVED and result.get("ok"):
+        issue = (result.get("issue") or {}).get("key", "the issue")
+        summary += f" Approved and filed as {issue}."
+    elif approval is ApprovalState.APPROVED and not result.get("ok"):
+        summary += " The approved action failed to execute; nothing was created."
+
     return AgentState(
         current_step="final_response",
         step_count=state.get("step_count", 0) + 1,
-        status=RunStatus.COMPLETED,
-        final_result=analysis.summary if analysis else "No analysis was produced.",
+        status=RunStatus.FAILED if state.get("status") is RunStatus.FAILED else RunStatus.COMPLETED,
+        final_result=summary,
     )
 
 
@@ -107,7 +166,9 @@ def build_graph(
     monitoring: MonitoringProvider | None = None,
     code: CodeProvider | None = None,
     logs: LogProvider | None = None,
+    issues: IssueProvider | None = None,
     model: BaseChatModel | None = None,
+    checkpointer: BaseCheckpointSaver | None = None,
     planner: Planner | None = None,
     guardrails: Guardrails | None = None,
     use_llm: bool = True,
@@ -125,6 +186,7 @@ def build_graph(
     monitoring = monitoring or MockMonitoringProvider()
     code = code or MockCodeProvider()
     logs = logs or MockLogProvider()
+    issues = issues or MockIssueProvider()
     guardrails = guardrails or Guardrails()
 
     if use_llm and model is None:
@@ -133,7 +195,7 @@ def build_graph(
         model = None
     planner = planner or (LLMPlanner(model) if model is not None else HeuristicPlanner())
 
-    registry = build_registry(monitoring, code, logs)
+    registry = build_registry(monitoring, code, logs, issues)
     timeout = guardrails.tool_timeout_seconds
 
     builder = StateGraph(AgentState)
@@ -147,6 +209,9 @@ def build_graph(
     builder.add_node("execute_tool", make_execute_tool_node(registry, guardrails))
     builder.add_node("evaluate_observation", evaluate_observation_node)
     builder.add_node("generate_analysis", make_build_analysis_node(model))
+    builder.add_node("propose_action", propose_action_node)
+    builder.add_node("request_approval", request_approval_node)
+    builder.add_node("execute_action", make_execute_action_node(registry, guardrails))
     builder.add_node("insufficient_context", insufficient_context_node)
     builder.add_node("final_response", finalize_node)
 
@@ -169,8 +234,22 @@ def build_graph(
         make_route_after_evaluation(guardrails),
         {"select_tool": "select_tool", "generate_analysis": "generate_analysis"},
     )
-    builder.add_edge("generate_analysis", "final_response")
+    builder.add_edge("generate_analysis", "propose_action")
+    builder.add_conditional_edges(
+        "propose_action",
+        route_after_proposal,
+        {"request_approval": "request_approval", "final_response": "final_response"},
+    )
+    builder.add_conditional_edges(
+        "request_approval",
+        route_after_approval,
+        {"execute_action": "execute_action", "final_response": "final_response"},
+    )
+    builder.add_edge("execute_action", "final_response")
     builder.add_edge("final_response", END)
     builder.add_edge("insufficient_context", END)
 
-    return builder.compile()
+    # An in-memory checkpointer by default so a bare ``build_graph()`` still
+    # supports the pause; a durable one is injected by the application, which
+    # is what makes approval survive a restart.
+    return builder.compile(checkpointer=checkpointer or InMemorySaver(serde=agent_serializer()))

@@ -136,6 +136,13 @@ class AgentState(TypedDict, total=False):
     analysis: IncidentAnalysis | None
     proposed_actions: list[ProposedAction]
     approval_state: ApprovalState
+    #: Who decided, and what they said. Recorded on the run because "the
+    #: agent created an issue" is never a complete answer to "who did this".
+    approved_by: str | None
+    approval_note: str
+    #: What the executed write returned, so the effect is linked to its
+    #: approval rather than only to a log line.
+    action_result: dict[str, Any] | None
     final_result: str | None
 
 
@@ -164,5 +171,8 @@ def initial_state(run_id: str, task: str, target_service: str | None = None) -> 
         analysis=None,
         proposed_actions=[],
         approval_state=ApprovalState.NOT_REQUIRED,
+        approved_by=None,
+        approval_note="",
+        action_result=None,
         final_result=None,
     )
