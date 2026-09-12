@@ -13,11 +13,18 @@ only a cost measure.
 
 from __future__ import annotations
 
-from app.adapters.base import CodeProvider, LogProvider, MonitoringProvider
+from app.adapters.base import (
+    CodeProvider,
+    IssueProvider,
+    LogProvider,
+    MonitoringProvider,
+)
 from app.agent.tools.base import AgentTool, ToolAccess, ToolRegistry
 from app.agent.tools.schemas import (
+    AddIssueCommentArgs,
     AlertsResult,
     CommitsResult,
+    CreateIssueArgs,
     DeploymentsResult,
     ErrorGroupsResult,
     GetCommitsArgs,
@@ -26,9 +33,13 @@ from app.agent.tools.schemas import (
     GetRecentAlertsArgs,
     GetRecentDeploymentsArgs,
     GetServiceMetricsArgs,
+    IssueResult,
+    IssuesResult,
     MetricsResult,
     PullRequestResult,
+    SearchIssuesArgs,
 )
+from app.domain.models import IssueDraft
 
 #: How many items a list-shaped result may put in front of the model.
 RENDER_LIMIT = 8
@@ -122,6 +133,25 @@ def _render_error_groups(result: ErrorGroupsResult) -> str:
     )
 
 
+def _render_issues(result: IssuesResult) -> str:
+    if not result.issues:
+        return "No matching issues."
+    lines = [
+        f"- {i.key} [{i.state}] {i.title}" + (f" ({', '.join(i.labels)})" if i.labels else "")
+        for i in result.issues[:RENDER_LIMIT]
+    ]
+    return _with_overflow(f"{len(result.issues)} issue(s):", lines, len(result.issues))
+
+
+def _render_issue(result: IssueResult) -> str:
+    issue = result.issue
+    return (
+        f"{issue.key} [{issue.state}] {issue.title}"
+        f"{f' — {issue.url}' if issue.url else ''}"
+        f"{f' ({len(issue.comments)} comment(s))' if issue.comments else ''}"
+    )
+
+
 def _with_overflow(header: str, lines: list[str], total: int) -> str:
     body = "\n".join(lines)
     if total > RENDER_LIMIT:
@@ -136,8 +166,18 @@ def build_registry(
     monitoring: MonitoringProvider,
     code: CodeProvider,
     logs: LogProvider,
+    issues: IssueProvider | None = None,
+    *,
+    actor: str = "ai-operations-agent",
 ) -> ToolRegistry:
-    """All read tools the agent may use. Write tools are registered in V4."""
+    """Every tool the agent has, read and write.
+
+    Registering a write tool does not make it reachable: the guardrails hide
+    every :attr:`ToolAccess.WRITE` tool from the planner and refuse to execute
+    one unless the run carries an approval. Registration and permission are
+    separate on purpose — the catalogue says what exists, the policy says what
+    may run, and conflating them is how a tool ends up callable by accident.
+    """
 
     async def get_service_metrics(args: GetServiceMetricsArgs) -> MetricsResult:
         start, end = _require_window(args)
@@ -169,86 +209,145 @@ def build_registry(
         found = await logs.get_error_groups(args.service, start, end, args.min_count)
         return ErrorGroupsResult(groups=tuple(found))
 
-    return ToolRegistry(
-        [
+    async def search_issues(args: SearchIssuesArgs) -> IssuesResult:
+        assert issues is not None
+        found = await issues.search_issues(args.query, args.service, args.state)
+        return IssuesResult(issues=tuple(found))
+
+    async def create_issue(args: CreateIssueArgs) -> IssueResult:
+        assert issues is not None
+        draft = IssueDraft(
+            title=args.title, body=args.body, service=args.service, labels=args.labels
+        )
+        return IssueResult(issue=await issues.create_issue(draft, author=actor))
+
+    async def add_issue_comment(args: AddIssueCommentArgs) -> IssueResult:
+        assert issues is not None
+        return IssueResult(issue=await issues.add_issue_comment(args.key, args.text, author=actor))
+
+    tools = [
+        AgentTool(
+            name="get_service_metrics",
+            description=(
+                "Time series for one service metric over the incident window. "
+                "Returns sample count, first/last/mean values and the peak with its "
+                "timestamp — use it to establish when a change in behaviour began."
+            ),
+            args_schema=GetServiceMetricsArgs,
+            result_schema=MetricsResult,
+            access=ToolAccess.READ,
+            handler=get_service_metrics,
+            render=_render_metrics,
+        ),
+        AgentTool(
+            name="get_recent_alerts",
+            description=(
+                "Alerts that fired for a service in the window, with severity and the "
+                "condition that triggered them. Useful for confirming that monitoring "
+                "agreed something was wrong, and when."
+            ),
+            args_schema=GetRecentAlertsArgs,
+            result_schema=AlertsResult,
+            access=ToolAccess.READ,
+            handler=get_recent_alerts,
+            render=_render_alerts,
+        ),
+        AgentTool(
+            name="get_recent_deployments",
+            description=(
+                "Releases of a service in the window, newest first, each with its "
+                "timestamp and commit SHA. The primary way to find a change that "
+                "precedes an incident."
+            ),
+            args_schema=GetRecentDeploymentsArgs,
+            result_schema=DeploymentsResult,
+            access=ToolAccess.READ,
+            handler=get_recent_deployments,
+            render=_render_deployments,
+        ),
+        AgentTool(
+            name="get_commits",
+            description=(
+                "Commits in a service repository within the window, newest first, with "
+                "author, message and changed files. Use after a suspect deployment is "
+                "known, to see what it actually shipped."
+            ),
+            args_schema=GetCommitsArgs,
+            result_schema=CommitsResult,
+            access=ToolAccess.READ,
+            handler=get_commits,
+            render=_render_commits,
+            cost=2,
+        ),
+        AgentTool(
+            name="get_pull_request",
+            description=(
+                "One pull request by number: title, author, merge time and commits. "
+                "Use only when a specific PR number is already known."
+            ),
+            args_schema=GetPullRequestArgs,
+            result_schema=PullRequestResult,
+            access=ToolAccess.READ,
+            handler=get_pull_request,
+            render=_render_pull_request,
+        ),
+        AgentTool(
+            name="get_error_groups",
+            description=(
+                "Application errors in the window, aggregated by error type, with counts, "
+                "first/last occurrence, a sample message and the failing stack frame. "
+                "Raw log lines are never returned."
+            ),
+            args_schema=GetErrorGroupsArgs,
+            result_schema=ErrorGroupsResult,
+            access=ToolAccess.READ,
+            handler=get_error_groups,
+            render=_render_error_groups,
+            cost=2,
+        ),
+    ]
+
+    if issues is not None:
+        tools += [
             AgentTool(
-                name="get_service_metrics",
+                name="search_issues",
                 description=(
-                    "Time series for one service metric over the incident window. "
-                    "Returns sample count, first/last/mean values and the peak with its "
-                    "timestamp — use it to establish when a change in behaviour began."
+                    "Search the issue tracker by free text, optionally by service and "
+                    "state. Use it before proposing a new issue: filing a duplicate of "
+                    "something already tracked is worse than filing nothing."
                 ),
-                args_schema=GetServiceMetricsArgs,
-                result_schema=MetricsResult,
+                args_schema=SearchIssuesArgs,
+                result_schema=IssuesResult,
                 access=ToolAccess.READ,
-                handler=get_service_metrics,
-                render=_render_metrics,
+                handler=search_issues,
+                render=_render_issues,
             ),
             AgentTool(
-                name="get_recent_alerts",
+                name="create_issue",
                 description=(
-                    "Alerts that fired for a service in the window, with severity and the "
-                    "condition that triggered them. Useful for confirming that monitoring "
-                    "agreed something was wrong, and when."
+                    "Create an issue in the tracker. This changes an external system "
+                    "and runs only after a human has approved the exact content."
                 ),
-                args_schema=GetRecentAlertsArgs,
-                result_schema=AlertsResult,
-                access=ToolAccess.READ,
-                handler=get_recent_alerts,
-                render=_render_alerts,
+                args_schema=CreateIssueArgs,
+                result_schema=IssueResult,
+                access=ToolAccess.WRITE,
+                handler=create_issue,
+                render=_render_issue,
+                cost=5,
             ),
             AgentTool(
-                name="get_recent_deployments",
+                name="add_issue_comment",
                 description=(
-                    "Releases of a service in the window, newest first, each with its "
-                    "timestamp and commit SHA. The primary way to find a change that "
-                    "precedes an incident."
+                    "Append a comment to an existing issue. This changes an external "
+                    "system and runs only after a human has approved it."
                 ),
-                args_schema=GetRecentDeploymentsArgs,
-                result_schema=DeploymentsResult,
-                access=ToolAccess.READ,
-                handler=get_recent_deployments,
-                render=_render_deployments,
-            ),
-            AgentTool(
-                name="get_commits",
-                description=(
-                    "Commits in a service repository within the window, newest first, with "
-                    "author, message and changed files. Use after a suspect deployment is "
-                    "known, to see what it actually shipped."
-                ),
-                args_schema=GetCommitsArgs,
-                result_schema=CommitsResult,
-                access=ToolAccess.READ,
-                handler=get_commits,
-                render=_render_commits,
-                cost=2,
-            ),
-            AgentTool(
-                name="get_pull_request",
-                description=(
-                    "One pull request by number: title, author, merge time and commits. "
-                    "Use only when a specific PR number is already known."
-                ),
-                args_schema=GetPullRequestArgs,
-                result_schema=PullRequestResult,
-                access=ToolAccess.READ,
-                handler=get_pull_request,
-                render=_render_pull_request,
-            ),
-            AgentTool(
-                name="get_error_groups",
-                description=(
-                    "Application errors in the window, aggregated by error type, with counts, "
-                    "first/last occurrence, a sample message and the failing stack frame. "
-                    "Raw log lines are never returned."
-                ),
-                args_schema=GetErrorGroupsArgs,
-                result_schema=ErrorGroupsResult,
-                access=ToolAccess.READ,
-                handler=get_error_groups,
-                render=_render_error_groups,
-                cost=2,
+                args_schema=AddIssueCommentArgs,
+                result_schema=IssueResult,
+                access=ToolAccess.WRITE,
+                handler=add_issue_comment,
+                render=_render_issue,
+                cost=3,
             ),
         ]
-    )
+
+    return ToolRegistry(tools)

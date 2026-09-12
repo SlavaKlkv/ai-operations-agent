@@ -15,6 +15,8 @@ from app.domain.models import (
     Commit,
     Deployment,
     ErrorGroup,
+    Issue,
+    IssueDraft,
     MetricSeries,
     PullRequest,
 )
@@ -47,3 +49,25 @@ class LogProvider(Protocol):
     async def get_error_groups(
         self, service: str, start: datetime, end: datetime, min_count: int = 1
     ) -> list[ErrorGroup]: ...
+
+
+@runtime_checkable
+class IssueProvider(Protocol):
+    """The issue tracker. The only provider with a write side.
+
+    ``create_issue`` and ``add_issue_comment`` are reachable from the graph
+    only through a tool marked :attr:`~app.agent.tools.base.ToolAccess.WRITE`,
+    which in turn is reachable only after an approval. The protocol itself
+    enforces nothing — that is the point of keeping the policy in one place
+    instead of scattering checks through every implementation.
+    """
+
+    async def search_issues(
+        self, query: str, service: str | None = None, state: str | None = None
+    ) -> list[Issue]: ...
+
+    async def get_issue(self, key: str) -> Issue | None: ...
+
+    async def create_issue(self, draft: IssueDraft, *, author: str) -> Issue: ...
+
+    async def add_issue_comment(self, key: str, text: str, *, author: str) -> Issue: ...

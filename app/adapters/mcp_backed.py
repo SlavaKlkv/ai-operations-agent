@@ -33,6 +33,9 @@ from app.domain.models import (
     Commit,
     Deployment,
     ErrorGroup,
+    Issue,
+    IssueDraft,
+    IssueState,
     MetricPoint,
     MetricSeries,
     PullRequest,
@@ -278,3 +281,76 @@ class MCPKnowledgeProvider:
         if not isinstance(payload, list):
             raise RemoteDataError("runbook search did not return a list of hits")
         return payload
+
+
+class MCPIssueProvider:
+    """The issue tracker, over the incident server — reads and writes.
+
+    The ``approved`` flag is threaded through to the pool rather than stored
+    on this object. A provider that could be constructed "in write mode"
+    would carry that permission into every later call; passing it per call
+    keeps an approval attached to the single action it was given for.
+    """
+
+    def __init__(self, pool: MCPToolPool) -> None:
+        self._pool = pool
+
+    async def search_issues(
+        self, query: str, service: str | None = None, state: str | None = None
+    ) -> list[Issue]:
+        payload = _unwrap(
+            await self._pool.call(
+                "search_issues", {"query": query, "service": service, "state": state}
+            )
+        )
+        return [_issue(item) for item in payload]
+
+    async def get_issue(self, key: str) -> Issue | None:
+        try:
+            return _issue(_unwrap(await self._pool.call("get_issue", {"key": key})))
+        except ToolCallFailed:
+            return None
+
+    async def create_issue(self, draft: IssueDraft, *, author: str) -> Issue:
+        payload = _unwrap(
+            await self._pool.call(
+                "create_issue",
+                {
+                    "title": draft.title,
+                    "body": draft.body,
+                    "service": draft.service,
+                    "labels": draft.labels,
+                    "author": author,
+                },
+                approved=True,
+            )
+        )
+        return _issue(payload)
+
+    async def add_issue_comment(self, key: str, text: str, *, author: str) -> Issue:
+        payload = _unwrap(
+            await self._pool.call(
+                "add_issue_comment",
+                {"key": key, "text": text, "author": author},
+                approved=True,
+            )
+        )
+        return _issue(payload)
+
+
+def _issue(payload: dict[str, Any]) -> Issue:
+    try:
+        return Issue(
+            key=payload["key"],
+            title=payload["title"],
+            body=payload.get("body", ""),
+            service=payload.get("service"),
+            labels=tuple(payload.get("labels", ())),
+            state=IssueState(payload.get("state", "open")),
+            created_at=_at(payload["created_at"]) if payload.get("created_at") else None,
+            created_by=payload.get("created_by", ""),
+            comments=tuple(payload.get("comments", ())),
+            url=payload.get("url"),
+        )
+    except (KeyError, TypeError, ValueError, ValidationError) as exc:
+        raise RemoteDataError(f"malformed issue payload: {exc}") from exc

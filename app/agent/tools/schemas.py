@@ -24,6 +24,7 @@ from app.domain.models import (
     Commit,
     Deployment,
     ErrorGroup,
+    Issue,
     MetricSeries,
     PullRequest,
 )
@@ -113,3 +114,48 @@ class GetErrorGroupsArgs(WindowArgs):
 
 class ErrorGroupsResult(_Result):
     groups: tuple[ErrorGroup, ...] = ()
+
+
+# ── Issues ───────────────────────────────────────────────────────────────────
+
+
+class SearchIssuesArgs(_Args):
+    query: str = Field(
+        default="", max_length=400, description="Free text matched against title and body."
+    )
+    service: str | None = Field(default=None, description="Restrict to one service.")
+    state: Literal["open", "closed"] | None = Field(
+        default=None, description="Restrict to open or closed issues."
+    )
+
+
+class IssuesResult(_Result):
+    issues: tuple[Issue, ...] = ()
+
+
+class CreateIssueArgs(_Args):
+    """Arguments for the one tool that changes an external system.
+
+    The bounds are tighter than the tracker's own, and deliberately so: a
+    title short enough to be meaningless or a body long enough to be a log
+    dump are both signs the agent has lost the thread, and the right moment
+    to catch that is before a human is asked to approve it.
+    """
+
+    title: str = Field(min_length=8, max_length=200, description="One line stating what is wrong.")
+    body: str = Field(
+        min_length=20,
+        max_length=20_000,
+        description="The analysis: symptoms, evidence, suspected cause, recommended actions.",
+    )
+    service: str | None = Field(default=None, description="Service the issue is about.")
+    labels: list[str] = Field(default_factory=list, max_length=10, description="Labels to apply.")
+
+
+class AddIssueCommentArgs(_Args):
+    key: str = Field(pattern=r"^[A-Z]+-\d+$", description="Issue key, e.g. OPS-12.")
+    text: str = Field(min_length=1, max_length=20_000, description="Comment body.")
+
+
+class IssueResult(_Result):
+    issue: Issue

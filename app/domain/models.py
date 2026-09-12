@@ -180,3 +180,42 @@ class IncidentAnalysis(BaseModel):
     recommended_actions: list[str] = Field(default_factory=list)
     requires_human_review: bool = True
     summary: str = ""
+
+
+# ── Issues ───────────────────────────────────────────────────────────────────
+
+
+class IssueState(StrEnum):
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+class Issue(_Frozen):
+    """An issue as the tracker reports it, after a read or a write."""
+
+    key: str
+    title: str
+    body: str = ""
+    service: str | None = None
+    labels: tuple[str, ...] = ()
+    state: IssueState = IssueState.OPEN
+    created_at: datetime | None = None
+    created_by: str = ""
+    comments: tuple[str, ...] = ()
+    url: str | None = None
+
+
+class IssueDraft(BaseModel):
+    """A proposed issue, before anyone has agreed to create it.
+
+    Separate from :class:`Issue` on purpose: a draft has no key, no author and
+    no URL, because it does not exist yet. Sharing one model would make it
+    possible to pass an unsaved draft where a created issue is expected.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=8, max_length=200)
+    body: str = Field(min_length=20, max_length=20_000)
+    service: str | None = None
+    labels: list[str] = Field(default_factory=list, max_length=10)
