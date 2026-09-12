@@ -49,7 +49,16 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 # Cyrillic is a legitimate part of this codebase (Russian-language tasks in
 # tests and fixtures), so the ambiguous-character checks are noise here.
-ignore = ["RUF001", "RUF002", "RUF003"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",
+    # `Depends(...)` in a default is how FastAPI declares dependencies.
+    "B008",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic generates these; reformatting them makes diffs unreadable.
+"migrations/versions/*" = ["E501"]
+"migrations/env.py" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
