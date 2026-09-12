@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     llm_max_retries: int = 2
     anthropic_api_key: SecretStr | None = None
 
+    # ── MCP integration layer ────────────────────────────────────────────────
+    #: Off in tests and for a minimal deployment: the agent then runs against
+    #: in-process mock providers instead of four MCP servers.
+    mcp_enabled: bool = True
+
     # ── Agent guardrails ─────────────────────────────────────────────────────
     max_tool_calls: int = 12
     max_workflow_steps: int = 30

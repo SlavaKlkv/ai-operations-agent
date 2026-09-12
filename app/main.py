@@ -7,19 +7,31 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 
-from app.api.routes import health, runs
+from app.api.routes import health, integrations, runs
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.mcp import runtime as mcp_runtime
 
 log = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    configure_logging(get_settings().log_level)
-    log.info("application.start", environment=get_settings().app_env)
-    yield
-    log.info("application.stop")
+    settings = get_settings()
+    configure_logging(settings.log_level)
+    log.info("application.start", environment=settings.app_env)
+
+    if settings.mcp_enabled:
+        # Connecting here, not per request: each stdio server is a subprocess,
+        # and a degraded integration layer is reported by /mcp/servers rather
+        # than preventing the application from starting.
+        pool = await mcp_runtime.startup()
+        log.info("mcp.ready", healthy=pool.healthy, tools=len(pool.tools()))
+    try:
+        yield
+    finally:
+        await mcp_runtime.shutdown()
+        log.info("application.stop")
 
 
 def create_app() -> FastAPI:
@@ -35,6 +47,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(runs.router)
+    app.include_router(integrations.router)
     return app
 
 
