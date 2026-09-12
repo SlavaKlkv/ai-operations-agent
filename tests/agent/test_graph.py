@@ -99,9 +99,7 @@ def _draft_call(**overrides):
     return AIMessage(content="", tool_calls=[{"name": "AnalysisDraft", "args": args, "id": "d"}])
 
 
-async def test_the_model_can_add_a_tool_call_and_then_conclude(
-    monitoring, code, logs, fresh_state
-):
+async def test_the_model_can_add_a_tool_call_and_then_conclude(monitoring, code, logs, fresh_state):
     """The full cycle: plan → execute → evaluate → plan again → analyse."""
     model = ScriptedChatModel(
         responses=[
@@ -119,9 +117,9 @@ async def test_the_model_can_add_a_tool_call_and_then_conclude(
             _draft_call(),
         ]
     )
-    final = await build_graph(
-        monitoring=monitoring, code=code, logs=logs, model=model
-    ).ainvoke(fresh_state)
+    final = await build_graph(monitoring=monitoring, code=code, logs=logs, model=model).ainvoke(
+        fresh_state
+    )
 
     assert final["status"] is RunStatus.COMPLETED
     assert final["loop_iterations"] == 1
@@ -149,9 +147,9 @@ async def test_a_model_that_cites_evidence_it_never_saw_loses_the_citation(
             ),
         ]
     )
-    final = await build_graph(
-        monitoring=monitoring, code=code, logs=logs, model=model
-    ).ainvoke(fresh_state)
+    final = await build_graph(monitoring=monitoring, code=code, logs=logs, model=model).ainvoke(
+        fresh_state
+    )
 
     cause = final["analysis"].suspected_causes[0]
     assert cause.supporting_evidence == ()
@@ -163,9 +161,9 @@ async def test_the_evidence_list_is_never_authored_by_the_model(
     monitoring, code, logs, fresh_state
 ):
     model = ScriptedChatModel(responses=[AIMessage(content="Enough."), _draft_call()])
-    final = await build_graph(
-        monitoring=monitoring, code=code, logs=logs, model=model
-    ).ainvoke(fresh_state)
+    final = await build_graph(monitoring=monitoring, code=code, logs=logs, model=model).ainvoke(
+        fresh_state
+    )
 
     executed = {r.tool for r in final["tool_calls"]} | {"detect_spike"}
     assert {e.source_tool for e in final["analysis"].evidence} <= executed
@@ -176,9 +174,9 @@ async def test_a_model_outage_degrades_the_run_instead_of_failing_it(
 ):
     """Both model calls fail. The run must still produce a grounded analysis."""
     model = ScriptedChatModel(responses=[])
-    final = await build_graph(
-        monitoring=monitoring, code=code, logs=logs, model=model
-    ).ainvoke(fresh_state)
+    final = await build_graph(monitoring=monitoring, code=code, logs=logs, model=model).ainvoke(
+        fresh_state
+    )
 
     assert final["status"] is RunStatus.COMPLETED
     assert final["analysis"] is not None
@@ -221,8 +219,8 @@ async def test_a_looping_model_is_stopped_by_the_iteration_ceiling(
 
 async def test_use_llm_false_forces_the_deterministic_baseline(monitoring, code, logs, fresh_state):
     """The evaluation harness needs a baseline that ignores configuration."""
-    final = await build_graph(
-        monitoring=monitoring, code=code, logs=logs, use_llm=False
-    ).ainvoke(fresh_state)
+    final = await build_graph(monitoring=monitoring, code=code, logs=logs, use_llm=False).ainvoke(
+        fresh_state
+    )
     assert final["llm_calls"] == 0
     assert final["analysis"] is not None

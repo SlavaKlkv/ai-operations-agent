@@ -151,8 +151,10 @@ async def test_a_failing_tool_does_not_abort_the_round(registry):
     result = await node(
         _state(
             pending_requests=[
-                ToolRequest(tool="get_service_metrics", arguments={"service": "nope",
-                                                                   "metric": "error_rate"}),
+                ToolRequest(
+                    tool="get_service_metrics",
+                    arguments={"service": "nope", "metric": "error_rate"},
+                ),
                 ToolRequest(tool="get_recent_alerts", arguments={"service": "billing-service"}),
             ]
         )

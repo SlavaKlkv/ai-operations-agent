@@ -29,6 +29,10 @@ def offline(monkeypatch):
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("APP_ENV", "test")
+    # Spawning four MCP subprocesses per app fixture would make the suite slow
+    # for no gain: the integration layer has its own tests, which connect a
+    # real client to a real server in-process.
+    monkeypatch.setenv("MCP_ENABLED", "false")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
