@@ -64,9 +64,7 @@ async def test_heuristic_asks_for_the_first_missing_signal(monitoring, code, log
 
 async def test_heuristic_moves_on_once_a_gap_is_closed(monitoring, code, logs):
     context = CollectedContext(alerts=[_alert()])
-    plan = await HeuristicPlanner().plan(
-        _state(context=context), _tools(monitoring, code, logs)
-    )
+    plan = await HeuristicPlanner().plan(_state(context=context), _tools(monitoring, code, logs))
     assert plan.requests[0].tool == "get_service_metrics"
     assert plan.requests[0].arguments["metric"] == "latency_p99"
 
@@ -83,7 +81,8 @@ async def test_heuristic_reads_code_only_once_errors_are_grounded(monitoring, co
             )
         },
     )
-    assert (await HeuristicPlanner().plan(_state(context=full), _tools(monitoring, code, logs))).is_done
+    plan = await HeuristicPlanner().plan(_state(context=full), _tools(monitoring, code, logs))
+    assert plan.is_done
 
     full.error_groups = [_error_group()]
     plan = await HeuristicPlanner().plan(_state(context=full), _tools(monitoring, code, logs))
