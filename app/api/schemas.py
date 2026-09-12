@@ -32,6 +32,7 @@ class ToolCallView(BaseModel):
     duration_ms: float
     attempt: int
     ok: bool
+    cached: bool = False
     error: str | None = None
     result_summary: str = ""
 

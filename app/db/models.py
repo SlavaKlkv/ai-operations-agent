@@ -111,6 +111,9 @@ class ToolCall(Base):
     ok: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    #: Served from cache rather than the provider. Kept so an audit can tell
+    #: what the agent actually asked an external system, and what it reused.
+    cached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     run: Mapped[AgentRun] = relationship(back_populates="tool_calls")
 

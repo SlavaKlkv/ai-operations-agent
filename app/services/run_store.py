@@ -148,6 +148,7 @@ async def _persist(session: AsyncSession, run: AgentRun, state: AgentState) -> A
                 ok=record.ok,
                 error=record.error,
                 result_summary=record.result_summary,
+                cached=record.cached,
             )
         )
 
