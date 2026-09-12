@@ -15,7 +15,12 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.agent.tools.base import AgentTool, ToolAccess, ToolNotAllowedError, ToolRegistry
+from app.agent.tools.base import (
+    AgentTool,
+    ToolAccess,
+    ToolNotAllowedError,
+    ToolRegistry,
+)
 
 
 class GuardrailViolation(RuntimeError):
@@ -105,14 +110,6 @@ class Guardrails:
 
 def _as_dict(g: Guardrails) -> dict[str, Any]:
     return {f: getattr(g, f) for f in Guardrails.__slots__}
-
-
-def call_signature(name: str, arguments: dict[str, Any]) -> str:
-    """Stable identity of a call, used for repetition detection and caching."""
-    rendered = ",".join(
-        f"{k}={arguments[k]!r}" for k in sorted(arguments) if arguments[k] is not None
-    )
-    return f"{name}({rendered})"
 
 
 def from_settings(settings: Any) -> Guardrails:

@@ -41,6 +41,7 @@ async def persist_final_state(session: AsyncSession, run: AgentRun, state: Agent
     run.target_service = state.get("target_service") or run.target_service
     run.step_count = state.get("step_count", 0)
     run.tool_call_count = state.get("tool_call_count", 0)
+    run.total_tokens = state.get("input_tokens", 0) + state.get("output_tokens", 0)
     run.final_result = state.get("final_result")
     run.finished_at = utcnow()
     run.state_snapshot = serialise_state(state)
@@ -79,7 +80,12 @@ async def persist_final_state(session: AsyncSession, run: AgentRun, state: Agent
             at=utcnow(),
             actor="agent",
             action="run.finished",
-            detail={"status": str(run.status), "tool_calls": run.tool_call_count},
+            detail={
+                "status": str(run.status),
+                "tool_calls": run.tool_call_count,
+                "llm_calls": state.get("llm_calls", 0),
+                "total_tokens": run.total_tokens,
+            },
         )
     )
     await session.commit()

@@ -12,13 +12,14 @@ graph can route on rather than raised through the workflow.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel
 
-from app.agent.guardrails import Guardrails, GuardrailViolation, call_signature
+from app.agent.guardrails import Guardrails, GuardrailViolation
 from app.agent.state import ToolCallRecord
 from app.agent.tooling import call_tool
 from app.agent.tools.base import (
@@ -26,22 +27,10 @@ from app.agent.tools.base import (
     InvalidToolArgumentsError,
     ToolError,
     ToolRegistry,
+    ToolRequest,
     UnknownToolError,
+    call_signature,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class ToolRequest:
-    """What the planner decided to do, before anyone has checked whether it may."""
-
-    tool: str
-    arguments: dict[str, Any]
-    #: Why the planner wants this. Kept for the audit trail and evaluation.
-    reason: str = ""
-
-    @property
-    def signature(self) -> str:
-        return call_signature(self.tool, self.arguments)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,10 +60,36 @@ class ToolInvocation:
 class ToolExecutor:
     """Registry + policy + timing, bound together for the lifetime of a run."""
 
-    def __init__(self, registry: ToolRegistry, guardrails: Guardrails) -> None:
+    def __init__(
+        self,
+        registry: ToolRegistry,
+        guardrails: Guardrails,
+        *,
+        history: Sequence[str] = (),
+    ) -> None:
         self._registry = registry
         self._guardrails = guardrails
-        self._history: list[str] = []
+        self._history: list[str] = list(history)
+
+    @classmethod
+    def resume(
+        cls,
+        registry: ToolRegistry,
+        guardrails: Guardrails,
+        records: Iterable[ToolCallRecord],
+    ) -> ToolExecutor:
+        """Rebuild an executor mid-run from what the state already records.
+
+        Graph nodes are shared across concurrent runs, so the executor cannot
+        be a long-lived object holding one run's history. Reconstructing it
+        from state each time keeps repetition detection working across the
+        loop while the graph itself stays stateless and re-entrant.
+        """
+        return cls(
+            registry,
+            guardrails,
+            history=[call_signature(r.tool, r.arguments) for r in records],
+        )
 
     @property
     def registry(self) -> ToolRegistry:
@@ -118,7 +133,7 @@ class ToolExecutor:
             return self._refused(request, exc)
 
         arguments = _merge_defaults(request.arguments, defaults, tool.args_schema)
-        request = ToolRequest(tool=request.tool, arguments=arguments, reason=request.reason)
+        request = request.model_copy(update={"arguments": arguments})
 
         try:
             self.authorise(request)
@@ -135,7 +150,7 @@ class ToolExecutor:
         outcome = await call_tool(
             tool.name,
             lambda: tool.handler(parsed),
-            arguments=_jsonable(arguments),
+            arguments=arguments,
             timeout=self._guardrails.tool_timeout_seconds,
             retries=self._guardrails.tool_retries,
         )
@@ -181,16 +196,20 @@ def _merge_defaults(
     handed one — its schema forbids extra fields and would reject the call.
     """
     merged = dict(arguments)
-    if not defaults:
-        return merged
-    for key, value in defaults.items():
+    for key, value in (defaults or {}).items():
         if key in args_schema.model_fields and merged.get(key) is None:
             merged[key] = value
-    return merged
+    return _jsonable(merged)
 
 
 def _jsonable(arguments: dict[str, Any]) -> dict[str, Any]:
-    """Arguments are stored in JSON columns, so datetimes become strings here."""
+    """Arguments are normalised to JSON primitives as early as possible.
+
+    They are stored in JSON columns, they form the call signature used for
+    repetition detection, and they have to survive a round-trip through state —
+    all three break if a ``datetime`` object leaks through. Pydantic parses the
+    ISO strings back on validation, so nothing is lost.
+    """
     return {
         key: value.isoformat() if isinstance(value, datetime) else value
         for key, value in arguments.items()

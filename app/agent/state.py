@@ -14,6 +14,7 @@ from typing import Annotated, Any, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.agent.tools.base import ToolRequest
 from app.domain.models import (
     Alert,
     Commit,
@@ -115,6 +116,21 @@ class AgentState(TypedDict, total=False):
     step_count: int
     tool_call_count: int
     status: RunStatus
+    #: How many tool calls the guardrails still allow. Shown to the planner so
+    #: it can spend a scarce budget on the evidence that matters most.
+    tool_budget_remaining: int
+    #: Iterations of the select → execute → evaluate cycle.
+    loop_iterations: int
+    #: What the planner asked for, between the decision and its execution.
+    pending_requests: list[ToolRequest]
+    #: Why the planner stopped, in its own words. Part of the audit answer to
+    #: "why did the agent conclude here".
+    planner_rationale: str
+
+    # Model accounting
+    llm_calls: Annotated[int, operator.add]
+    input_tokens: Annotated[int, operator.add]
+    output_tokens: Annotated[int, operator.add]
 
     # Output
     analysis: IncidentAnalysis | None
@@ -138,6 +154,13 @@ def initial_state(run_id: str, task: str, target_service: str | None = None) -> 
         step_count=0,
         tool_call_count=0,
         status=RunStatus.RUNNING,
+        tool_budget_remaining=0,
+        loop_iterations=0,
+        pending_requests=[],
+        planner_rationale="",
+        llm_calls=0,
+        input_tokens=0,
+        output_tokens=0,
         analysis=None,
         proposed_actions=[],
         approval_state=ApprovalState.NOT_REQUIRED,

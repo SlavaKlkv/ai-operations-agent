@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,18 @@ from app.domain.models import IncidentAnalysis
 from app.services import run_store
 
 router = APIRouter(prefix="/runs", tags=["runs"])
+
+
+@lru_cache(maxsize=1)
+def get_graph():
+    """Compile once per process.
+
+    The graph holds no per-run state — nodes read and return state, and the
+    tool executor is rebuilt from state on every call — so one compiled graph
+    serves concurrent requests safely. Compiling per request would also mean
+    re-reading credentials and rebuilding the registry on every investigation.
+    """
+    return build_graph()
 
 
 def _to_detail(run: AgentRun) -> RunDetail:
@@ -40,8 +53,9 @@ async def start_run(payload: RunRequest, session: AsyncSession = Depends(get_ses
     run = await run_store.create_run(
         session, task=payload.task, target_service=payload.target_service
     )
-    graph = build_graph()
-    final = await graph.ainvoke(initial_state(str(run.id), payload.task, payload.target_service))
+    final = await get_graph().ainvoke(
+        initial_state(str(run.id), payload.task, payload.target_service)
+    )
     await run_store.persist_final_state(session, run, final)
     stored = await run_store.get_run(session, run.id)
     assert stored is not None

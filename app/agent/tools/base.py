@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
 class ToolAccess(StrEnum):
@@ -103,12 +103,44 @@ class AgentTool[A: BaseModel, R: BaseModel]:
         return {"name": self.name, "description": self.description, "input_schema": schema}
 
 
+def call_signature(name: str, arguments: dict[str, Any]) -> str:
+    """Stable identity of a call: same tool, same meaningful arguments.
+
+    Omitted arguments and key order must not change it, otherwise repetition
+    detection would be defeated by the model reordering a dict.
+    """
+    rendered = ",".join(
+        f"{k}={arguments[k]!r}" for k in sorted(arguments) if arguments[k] is not None
+    )
+    return f"{name}({rendered})"
+
+
 def _compact(exc: ValidationError) -> str:
     """One line per validation problem — model-readable, log-friendly."""
     return "; ".join(
         f"{'.'.join(str(p) for p in err['loc']) or '<root>'}: {err['msg']}"
         for err in exc.errors()[:5]
     )
+
+
+class ToolRequest(BaseModel):
+    """What the planner decided to do, before anyone has checked whether it may.
+
+    A Pydantic model rather than a plain dataclass because pending requests
+    live in the graph state, and state has to survive serialisation into the
+    run snapshot that the audit trail is built from.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tool: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    #: Why the planner wants this. Kept for the audit trail and evaluation.
+    reason: str = ""
+
+    @property
+    def signature(self) -> str:
+        return call_signature(self.tool, self.arguments)
 
 
 class ToolRegistry:

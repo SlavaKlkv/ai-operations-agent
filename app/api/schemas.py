@@ -46,6 +46,7 @@ class RunSummary(BaseModel):
     approval_state: ApprovalState
     step_count: int
     tool_call_count: int
+    total_tokens: int = 0
     created_at: datetime
     finished_at: datetime | None = None
     final_result: str | None = None
