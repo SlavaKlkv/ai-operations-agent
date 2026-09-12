@@ -13,10 +13,11 @@ from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.agent.state import AgentState
 from app.adapters.mock.dataset import DEFAULT_SCENARIO
+from app.agent.state import AgentState
 
 _SERVICE_RE = re.compile(r"\b([a-z0-9]+(?:-[a-z0-9]+)*-service)\b", re.IGNORECASE)
+_KEYWORD_RE = re.compile(r"\b(5xx|4xx|latency|errors?|timeout)\b", re.IGNORECASE)
 DEFAULT_LOOKBACK = timedelta(hours=1)
 
 
@@ -42,7 +43,7 @@ def analyse_task(task: str, now: datetime | None = None) -> TaskAnalysis:
         target_service=extract_service(task),
         window_start=reference - DEFAULT_LOOKBACK,
         window_end=reference,
-        keywords=sorted({w.lower() for w in re.findall(r"\b(5xx|4xx|latency|errors?|timeout)\b", task, re.I)}),
+        keywords=sorted({w.lower() for w in _KEYWORD_RE.findall(task)}),
     )
 
 

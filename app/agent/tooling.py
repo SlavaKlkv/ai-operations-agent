@@ -12,11 +12,9 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from app.agent.state import ToolCallRecord
-
-T = TypeVar("T")
 
 
 class ToolBudgetExceeded(RuntimeError):
@@ -24,7 +22,7 @@ class ToolBudgetExceeded(RuntimeError):
 
 
 @dataclass(slots=True)
-class ToolOutcome(Generic[T]):
+class ToolOutcome[T]:
     value: T | None
     record: ToolCallRecord
 
@@ -33,7 +31,7 @@ class ToolOutcome(Generic[T]):
         return self.record.ok
 
 
-async def call_tool(
+async def call_tool[T](
     name: str,
     fn: Callable[[], Awaitable[T]],
     *,
@@ -58,7 +56,7 @@ async def call_tool(
             value = await asyncio.wait_for(fn(), timeout=timeout)
         except TimeoutError:
             last_error = f"timeout after {timeout}s"
-        except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
+        except Exception as exc:
             last_error = f"{type(exc).__name__}: {exc}"
         else:
             return ToolOutcome(

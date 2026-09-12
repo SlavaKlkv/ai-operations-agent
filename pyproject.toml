@@ -44,6 +44,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
+# Cyrillic is a legitimate part of this codebase (Russian-language tasks in
+# tests and fixtures), so the ambiguous-character checks are noise here.
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

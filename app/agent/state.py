@@ -14,7 +14,16 @@ from typing import Annotated, Any, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.models import Evidence, Hypothesis, IncidentAnalysis
+from app.domain.models import (
+    Alert,
+    Commit,
+    Deployment,
+    ErrorGroup,
+    Evidence,
+    Hypothesis,
+    IncidentAnalysis,
+    MetricSeries,
+)
 
 
 class RunStatus(StrEnum):
@@ -58,6 +67,22 @@ class ProposedAction(BaseModel):
     requires_approval: bool = True
 
 
+class CollectedContext(BaseModel):
+    """Raw-but-typed observations, kept so later nodes can re-reason over them.
+
+    Evidence is the human-readable trace of what was found; this is the machine
+    -readable counterpart that correlation and analysis actually compute on.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    metrics: dict[str, MetricSeries] = Field(default_factory=dict)
+    deployments: list[Deployment] = Field(default_factory=list)
+    commits: list[Commit] = Field(default_factory=list)
+    error_groups: list[ErrorGroup] = Field(default_factory=list)
+    alerts: list[Alert] = Field(default_factory=list)
+
+
 class RunError(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -82,6 +107,7 @@ class AgentState(TypedDict, total=False):
     tool_calls: Annotated[list[ToolCallRecord], operator.add]
     evidence: Annotated[list[Evidence], operator.add]
     hypotheses: list[Hypothesis]
+    context: CollectedContext
     errors: Annotated[list[RunError], operator.add]
 
     # Control
@@ -106,6 +132,7 @@ def initial_state(run_id: str, task: str, target_service: str | None = None) -> 
         tool_calls=[],
         evidence=[],
         hypotheses=[],
+        context=CollectedContext(),
         errors=[],
         current_step="start",
         step_count=0,

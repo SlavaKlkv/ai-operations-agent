@@ -32,13 +32,9 @@ class MockMonitoringProvider:
         points = tuple(p for p in series.points if start <= p.timestamp <= end)
         return series.model_copy(update={"points": points})
 
-    async def get_recent_alerts(
-        self, service: str, start: datetime, end: datetime
-    ) -> list[Alert]:
+    async def get_recent_alerts(self, service: str, start: datetime, end: datetime) -> list[Alert]:
         return [
-            a
-            for a in self._scenario.alerts
-            if a.service == service and start <= a.fired_at <= end
+            a for a in self._scenario.alerts if a.service == service and start <= a.fired_at <= end
         ]
 
 
