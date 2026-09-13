@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" width="1000" height="700" role="img" aria-labelledby="title desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
-  <title id="title">The investigation graph</title>
-  <desc id="desc">A LangGraph workflow: deterministic collection and correlation, then a bounded loop of tool selection, then a human approval gate before any write.</desc>
+  <title id="title">Граф расследования</title>
+  <desc id="desc">Воркфлоу на LangGraph: детерминированный сбор и корреляция, затем ограниченный цикл выбора инструментов, затем подтверждение человеком перед любой записью.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#59636e"/>
@@ -13,76 +13,77 @@
     </marker>
   </defs>
   <rect width="1000" height="700" fill="#ffffff"/>
-<text x="32" y="34" font-size="12" font-weight="700" letter-spacing="0.7" fill="#59636e">THE INVESTIGATION GRAPH</text>
-<text x="32" y="54" text-anchor="start" font-size="11.5" fill="#59636e">Deterministic work first, then a bounded agentic loop, then a human.</text>
+<text x="32" y="34" font-size="12" font-weight="700" letter-spacing="0.7" fill="#59636e">ГРАФ РАССЛЕДОВАНИЯ</text>
+<text x="32" y="54" text-anchor="start" font-size="11.5" fill="#59636e">Сначала детерминированная работа, затем ограниченный агентный цикл, затем человек.</text>
 <rect x="374.0" y="82" width="76" height="28" rx="14" fill="#ffffff" stroke="#d1d9e0" stroke-width="1.5"/>
 <text x="412.0" y="101.0" text-anchor="middle" font-size="14" font-weight="600" fill="#59636e">START</text>
 <path d="M 412.0 110 L 412.0 132" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
 <rect x="300" y="132" width="224" height="50" rx="8" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="412.0" y="153.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">analyze_task</text>
-<text x="412.0" y="170.0" text-anchor="middle" font-size="11.5" fill="#59636e">service and time window</text>
+<text x="412.0" y="150.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">analyze_task</text>
+<text x="412.0" y="167.0" text-anchor="middle" font-size="11.5" fill="#59636e">сервис и временное окно</text>
 <path d="M 412.0 182 L 412.0 206" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
 <rect x="300" y="206" width="224" height="50" rx="8" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="412.0" y="227.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">collect_initial_context</text>
-<text x="412.0" y="244.0" text-anchor="middle" font-size="11.5" fill="#59636e">metrics · deploys · errors · alerts</text>
+<text x="412.0" y="224.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">collect_initial_context</text>
+<text x="412.0" y="241.0" text-anchor="middle" font-size="11.5" fill="#59636e">метрики · деплои · ошибки · алерты</text>
 <path d="M 296 231 L 224 231" fill="none" stroke="#cf222e" stroke-width="1.6" marker-end="url(#arrow-danger)"/>
-<text x="260" y="222" text-anchor="middle" font-size="10.5" fill="#59636e">no signal</text>
+<text x="260" y="222" text-anchor="middle" font-size="10.5" fill="#59636e">нет сигнала</text>
 <rect x="24" y="206" width="200" height="50" rx="8" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
-<text x="124.0" y="227.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">insufficient_context</text>
-<text x="124.0" y="244.0" text-anchor="middle" font-size="11.5" fill="#59636e">stops, and says why</text>
+<text x="124.0" y="224.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">insufficient_context</text>
+<text x="124.0" y="241.0" text-anchor="middle" font-size="11.5" fill="#59636e">останавливается и объясняет</text>
 <path d="M 412.0 256 L 412.0 280" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
 <rect x="300" y="280" width="224" height="50" rx="8" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
-<text x="412.0" y="301.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">correlate</text>
-<text x="412.0" y="318.0" text-anchor="middle" font-size="11.5" fill="#59636e">spike ↔ deployment ↔ commit</text>
+<text x="412.0" y="298.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">correlate</text>
+<text x="412.0" y="315.0" text-anchor="middle" font-size="11.5" fill="#59636e">всплеск ↔ деплой ↔ коммит</text>
 <path d="M 412.0 330 L 412.0 362" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
 <rect x="184" y="352" width="372" height="264" rx="12" fill="none" stroke="#d1d9e0" stroke-width="1.25" stroke-dasharray="6 5"/>
-<text x="198" y="371" font-size="11" font-weight="600" letter-spacing="0.6" fill="#59636e">AGENTIC LOOP — BOUNDED</text>
+<text x="198" y="371" font-size="11" font-weight="600" letter-spacing="0.6" fill="#59636e">АГЕНТНЫЙ ЦИКЛ — ОГРАНИЧЕННЫЙ</text>
 <rect x="300" y="382" width="224" height="50" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
-<text x="412.0" y="403.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">select_tool</text>
-<text x="412.0" y="420.0" text-anchor="middle" font-size="11.5" fill="#59636e">the model's one real choice</text>
+<text x="412.0" y="393.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">select_tool</text>
+<text x="412.0" y="410.0" text-anchor="middle" font-size="11.5" fill="#59636e">единственный реальный выбор</text>
+<text x="412.0" y="424.0" text-anchor="middle" font-size="11.5" fill="#59636e">модели</text>
 <path d="M 412.0 432 L 412.0 458" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
 <rect x="300" y="458" width="224" height="50" rx="8" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="412.0" y="479.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">execute_tool</text>
-<text x="412.0" y="496.0" text-anchor="middle" font-size="11.5" fill="#59636e">validated · timed · recorded</text>
+<text x="412.0" y="476.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">execute_tool</text>
+<text x="412.0" y="493.0" text-anchor="middle" font-size="11.5" fill="#59636e">проверен · по таймауту · записан</text>
 <path d="M 412.0 508 L 412.0 534" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
 <rect x="300" y="534" width="224" height="50" rx="8" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="412.0" y="555.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">evaluate_observation</text>
-<text x="412.0" y="572.0" text-anchor="middle" font-size="11.5" fill="#59636e">did that change anything?</text>
+<text x="412.0" y="552.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">evaluate_observation</text>
+<text x="412.0" y="569.0" text-anchor="middle" font-size="11.5" fill="#59636e">это что-то изменило?</text>
 <path d="M 300 559 L 208 559 L 208 407 L 300 407" fill="none" stroke="#0969da" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
-<text x="156.0" y="487.0" text-anchor="middle" font-size="11" fill="#59636e">more to learn</text>
-<text x="196" y="604" text-anchor="start" font-size="10.5" fill="#59636e">exits on: nothing asked · budget spent · no progress · 4 iterations</text>
+<text x="156.0" y="487.0" text-anchor="middle" font-size="11" fill="#59636e">есть что узнать</text>
+<text x="196" y="604" text-anchor="start" font-size="10.5" fill="#59636e">выходы: ничего не запрошено · бюджет исчерпан · нет прогресса · 4 итерации</text>
 <path d="M 524 559 L 690 559" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
-<text x="607.0" y="550.0" text-anchor="middle" font-size="11" fill="#59636e">enough</text>
+<text x="607.0" y="550.0" text-anchor="middle" font-size="11" fill="#59636e">достаточно</text>
 <rect x="676" y="534" width="224" height="50" rx="8" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
-<text x="788.0" y="555.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">generate_analysis</text>
-<text x="788.0" y="572.0" text-anchor="middle" font-size="11.5" fill="#59636e">structured · grounded</text>
+<text x="788.0" y="552.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">generate_analysis</text>
+<text x="788.0" y="569.0" text-anchor="middle" font-size="11.5" fill="#59636e">структурирован · заземлён</text>
 <path d="M 788.0 534 L 788.0 504" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
 <rect x="676" y="454" width="224" height="50" rx="8" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="788.0" y="475.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">propose_action</text>
-<text x="788.0" y="492.0" text-anchor="middle" font-size="11.5" fill="#59636e">confidence ≥ 0.6, or nothing</text>
+<text x="788.0" y="472.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">propose_action</text>
+<text x="788.0" y="489.0" text-anchor="middle" font-size="11.5" fill="#59636e">уверенность ≥ 0.6, иначе ничего</text>
 <path d="M 788.0 454 L 788.0 424" fill="none" stroke="#cf222e" stroke-width="1.6" marker-end="url(#arrow-danger)"/>
-<text x="798.0" y="443" text-anchor="start" font-size="10.5" fill="#59636e">write proposed</text>
+<text x="798.0" y="443" text-anchor="start" font-size="10.5" fill="#59636e">предложена запись</text>
 <path d="M 676 479 L 636 479 L 636 190 L 680 190" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
-<text x="626" y="300" text-anchor="end" font-size="10.5" fill="#59636e">nothing to write</text>
+<text x="626" y="300" text-anchor="end" font-size="10.5" fill="#59636e">писать нечего</text>
 <rect x="676" y="374" width="224" height="50" rx="8" fill="#fff8c5" stroke="#9a6700" stroke-width="1.5"/>
-<text x="788.0" y="395.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">request_approval</text>
-<text x="788.0" y="412.0" text-anchor="middle" font-size="11.5" fill="#59636e">graph pauses · state checkpointed</text>
+<text x="788.0" y="392.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">request_approval</text>
+<text x="788.0" y="409.0" text-anchor="middle" font-size="11.5" fill="#59636e">пауза · состояние в чекпоинте</text>
 <path d="M 788.0 374 L 788.0 344" fill="none" stroke="#cf222e" stroke-width="1.6" marker-end="url(#arrow-danger)"/>
-<text x="798.0" y="363" text-anchor="start" font-size="10.5" fill="#59636e">approved</text>
+<text x="798.0" y="363" text-anchor="start" font-size="10.5" fill="#59636e">подтверждено</text>
 <path d="M 900 399 L 940 399 L 940 190 L 896 190" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
-<text x="950" y="300" text-anchor="start" font-size="10.5" fill="#59636e">rejected</text>
+<text x="934" y="300" text-anchor="end" font-size="10.5" fill="#59636e">отклонено</text>
 <rect x="676" y="294" width="224" height="50" rx="8" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
-<text x="788.0" y="315.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">execute_action</text>
-<text x="788.0" y="332.0" text-anchor="middle" font-size="11.5" fill="#59636e">one tool · one step</text>
+<text x="788.0" y="312.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">execute_action</text>
+<text x="788.0" y="329.0" text-anchor="middle" font-size="11.5" fill="#59636e">один инструмент · один шаг</text>
 <path d="M 788.0 294 L 788.0 240" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
 <rect x="676" y="190" width="224" height="50" rx="8" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="788.0" y="211.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">final_response</text>
-<text x="788.0" y="228.0" text-anchor="middle" font-size="11.5" fill="#59636e">says what it did, and did not, do</text>
+<text x="788.0" y="208.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">final_response</text>
+<text x="788.0" y="225.0" text-anchor="middle" font-size="11.5" fill="#59636e">что сделал и чего не сделал</text>
 <path d="M 788.0 190 L 788.0 164" fill="none" stroke="#59636e" stroke-width="1.6" marker-end="url(#arrow)"/>
 <rect x="756.0" y="136" width="64" height="28" rx="14" fill="#ffffff" stroke="#d1d9e0" stroke-width="1.5"/>
 <text x="788.0" y="155.0" text-anchor="middle" font-size="14" font-weight="600" fill="#59636e">END</text>
 <rect x="32" y="634" width="936" height="48" rx="10" fill="#fff8c5" stroke="#9a6700" stroke-width="1.5"/>
 <text x="500.0" y="663.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328"></text>
-<text x="52" y="656" text-anchor="start" font-size="12" fill="#1f2328">The pause is durable. State is checkpointed, so the decision arrives as a separate HTTP request from a separate person —</text>
-<text x="52" y="673" text-anchor="start" font-size="11.5" fill="#59636e">and the action executed is the one the graph saved, not anything the approving request carries.</text>
+<text x="52" y="656" text-anchor="start" font-size="12" fill="#1f2328">Пауза долговечная: состояние лежит в чекпоинте, поэтому решение приходит отдельным HTTP-запросом от отдельного человека —</text>
+<text x="52" y="673" text-anchor="start" font-size="11.5" fill="#59636e">а выполняется то действие, которое сохранил граф, а не то, что несёт подтверждающий запрос.</text>
 </svg>

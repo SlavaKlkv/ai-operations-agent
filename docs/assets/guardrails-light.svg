@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" width="1000" height="430" role="img" aria-labelledby="title desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
-  <title id="title">What the agent cannot do</title>
-  <desc id="desc">Three layers of enforcement: the model proposes, the registry validates and refuses, and a person authorises every write.</desc>
+  <title id="title">Чего агент не может</title>
+  <desc id="desc">Три слоя контроля: модель предлагает, реестр проверяет и отказывает, человек санкционирует каждую запись.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#59636e"/>
@@ -13,40 +13,42 @@
     </marker>
   </defs>
   <rect width="1000" height="430" fill="#ffffff"/>
-<text x="32" y="34" font-size="12" font-weight="700" letter-spacing="0.7" fill="#59636e">WHAT THE AGENT CANNOT DO</text>
-<text x="32" y="54" text-anchor="start" font-size="11.5" fill="#59636e">Every limit below is enforced in code, before a tool runs. None of it is a prompt instruction.</text>
+<text x="32" y="34" font-size="12" font-weight="700" letter-spacing="0.7" fill="#59636e">ЧЕГО АГЕНТ НЕ МОЖЕТ</text>
+<text x="32" y="54" text-anchor="start" font-size="11.5" fill="#59636e">Каждое ограничение ниже вшито в код и проверяется до запуска инструмента. Ничего из этого не является инструкцией в промпте.</text>
 <rect x="32" y="84" width="292" height="40" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
-<text x="178.0" y="109.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">The model proposes</text>
+<text x="178.0" y="109.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">Модель предлагает</text>
 <circle cx="50" cy="144" r="3" fill="#0969da"/>
-<text x="64" y="148" text-anchor="start" font-size="12" fill="#1f2328">sees only the tools the policy allows</text>
+<text x="64" y="148" text-anchor="start" font-size="12" fill="#1f2328">видит только разрешённые политикой инструменты</text>
 <circle cx="50" cy="174" r="3" fill="#0969da"/>
-<text x="64" y="178" text-anchor="start" font-size="12" fill="#1f2328">answers with a name and arguments</text>
+<text x="64" y="178" text-anchor="start" font-size="12" fill="#1f2328">отвечает именем и аргументами</text>
 <circle cx="50" cy="204" r="3" fill="#0969da"/>
-<text x="64" y="208" text-anchor="start" font-size="12" fill="#1f2328">cannot add a tool or widen its own reach</text>
+<text x="64" y="208" text-anchor="start" font-size="12" fill="#1f2328">не может добавить инструмент или расширить доступ</text>
 <rect x="345" y="84" width="292" height="40" rx="8" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
-<text x="491.0" y="109.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">The registry decides</text>
+<text x="491.0" y="109.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">Реестр решает</text>
 <circle cx="363" cy="144" r="3" fill="#d1d9e0"/>
-<text x="377" y="148" text-anchor="start" font-size="12" fill="#1f2328">unknown name → refused and recorded</text>
+<text x="377" y="148" text-anchor="start" font-size="12" fill="#1f2328">неизвестное имя → отказ, вызов записан</text>
 <circle cx="363" cy="174" r="3" fill="#d1d9e0"/>
-<text x="377" y="178" text-anchor="start" font-size="12" fill="#1f2328">arguments validated against a schema</text>
+<text x="377" y="178" text-anchor="start" font-size="12" fill="#1f2328">аргументы проверяются схемой</text>
 <circle cx="363" cy="204" r="3" fill="#d1d9e0"/>
-<text x="377" y="208" text-anchor="start" font-size="12" fill="#1f2328">identical call repeated → refused</text>
+<text x="377" y="208" text-anchor="start" font-size="12" fill="#1f2328">повтор идентичного вызова → отказ</text>
 <circle cx="363" cy="234" r="3" fill="#d1d9e0"/>
-<text x="377" y="238" text-anchor="start" font-size="12" fill="#1f2328">timeout and retry belong to the runtime</text>
+<text x="377" y="238" text-anchor="start" font-size="12" fill="#1f2328">таймаут и ретрай — свойство рантайма</text>
 <rect x="658" y="84" width="292" height="40" rx="8" fill="#fff8c5" stroke="#9a6700" stroke-width="1.5"/>
-<text x="804.0" y="109.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">A person authorises</text>
+<text x="804.0" y="109.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">Человек санкционирует</text>
 <circle cx="676" cy="144" r="3" fill="#9a6700"/>
-<text x="690" y="148" text-anchor="start" font-size="12" fill="#1f2328">write tools are invisible to the planner</text>
+<text x="690" y="148" text-anchor="start" font-size="12" fill="#1f2328">write-инструменты не видны планировщику</text>
 <circle cx="676" cy="174" r="3" fill="#9a6700"/>
-<text x="690" y="178" text-anchor="start" font-size="12" fill="#1f2328">the graph pauses; state is checkpointed</text>
+<text x="690" y="178" text-anchor="start" font-size="12" fill="#1f2328">граф встаёт на паузу, состояние сохраняется</text>
 <circle cx="676" cy="204" r="3" fill="#9a6700"/>
-<text x="690" y="208" text-anchor="start" font-size="12" fill="#1f2328">the decision carries no action of its own</text>
+<text x="690" y="208" text-anchor="start" font-size="12" fill="#1f2328">решение не несёт собственного действия</text>
 <circle cx="676" cy="234" r="3" fill="#9a6700"/>
-<text x="690" y="238" text-anchor="start" font-size="12" fill="#1f2328">permission is granted for one step</text>
+<text x="690" y="238" text-anchor="start" font-size="12" fill="#1f2328">право выдаётся на один шаг</text>
 <path d="M 324 104 L 345 104" fill="none" stroke="#0969da" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
 <path d="M 637 104 L 658 104" fill="none" stroke="#0969da" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
-<rect x="32" y="300" width="936" height="44" rx="10" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
-<text x="500.0" y="327.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328"></text>
-<text x="52" y="327" text-anchor="start" font-size="12.5" fill="#1f2328">agent_unapproved_writes_total must stay at zero. It is derived from the recorded calls, not from a flag, and pages immediately if it ever moves.</text>
-<text x="32" y="380" text-anchor="start" font-size="12" fill="#59636e">Budgets: 12 tool calls · 30 workflow steps · 4 loop iterations · 15 s per tool · 2 identical calls · no shell, no code execution, no tool outside the registry.</text>
+<rect x="32" y="296" width="936" height="56" rx="10" fill="#ffebe9" stroke="#cf222e" stroke-width="1.5"/>
+<text x="500.0" y="329.0" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328"></text>
+<text x="52" y="320" text-anchor="start" font-size="12.5" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace">agent_unapproved_writes_total обязан стоять на нуле.</text>
+<text x="52" y="339" text-anchor="start" font-size="11.5" fill="#59636e">Он выводится из записанных вызовов, а не из флага, и поднимает тревогу сразу, как только сдвинется.</text>
+<text x="32" y="384" text-anchor="start" font-size="12" fill="#59636e">Бюджеты: 12 вызовов · 30 шагов графа · 4 итерации цикла · 15 с на инструмент · 2 идентичных вызова.</text>
+<text x="32" y="404" text-anchor="start" font-size="12" fill="#59636e">Никакого shell, исполнения произвольного кода и инструментов вне реестра.</text>
 </svg>

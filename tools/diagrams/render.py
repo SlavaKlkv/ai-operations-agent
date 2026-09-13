@@ -86,6 +86,49 @@ TONES = {
 }
 
 
+#: Rough per-character advance as a fraction of font size. SVG has no layout
+#: engine, so the only way to know whether a label fits is to estimate it.
+#: Cyrillic and Latin lowercase sit close enough at these sizes that one
+#: factor covers both; the value errs slightly wide, which is the safe side.
+CHAR_WIDTH = 0.55
+WIDE_CHARS = set("MWmwФШЩЫЮЖ")
+
+
+def text_width(text: str, size: float) -> float:
+    total = 0.0
+    for char in text:
+        if char == " ":
+            total += 0.28
+        elif char in WIDE_CHARS:
+            total += 0.78
+        elif char.isupper():
+            total += 0.64
+        else:
+            total += CHAR_WIDTH
+    return total * size
+
+
+def wrap(text: str, max_width: float, size: float) -> list[str]:
+    """Break a label into lines that fit. Explicit newlines are honoured.
+
+    Written because translating the labels made several of them overflow their
+    boxes, and hand-tuning each one would only postpone the problem until the
+    next edit.
+    """
+    lines: list[str] = []
+    for paragraph in text.split("\n"):
+        current = ""
+        for word in paragraph.split(" "):
+            candidate = f"{current} {word}".strip()
+            if current and text_width(candidate, size) > max_width:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        lines.append(current)
+    return lines
+
+
 # ── Primitives ───────────────────────────────────────────────────────────────
 
 
@@ -147,15 +190,19 @@ def box(
     ]
     cx = x + w / 2
     if subtitle:
+        wrapped = wrap(subtitle, w - 20, 11.5)
+        # Centre title and subtitle as one block, so a label that wraps to
+        # three lines stays inside the box instead of spilling out the bottom.
+        top = y + h / 2 - (len(wrapped) * 14) / 2
         lines.append(
-            f'<text x="{cx}" y="{y + h / 2 - 4}" text-anchor="middle" font-size="14" '
+            f'<text x="{cx}" y="{top}" text-anchor="middle" font-size="14" '
             f'font-weight="600" fill="{text}"'
             + (f' font-family="{MONO}"' if mono else "")
             + f">{escape(title)}</text>"
         )
-        for index, part in enumerate(subtitle.split("\n")):
+        for index, part in enumerate(wrapped):
             lines.append(
-                f'<text x="{cx}" y="{y + h / 2 + 13 + index * 14}" text-anchor="middle" '
+                f'<text x="{cx}" y="{top + 17 + index * 14}" text-anchor="middle" '
                 f'font-size="11.5" fill="{p.muted}">{escape(part)}</text>'
             )
     else:
@@ -251,14 +298,14 @@ def heading(p: Palette, x: float, y: float, text: str) -> str:
 def architecture(p: Palette) -> Canvas:
     c = Canvas(1000, 620)
 
-    c.add(heading(p, 32, 34, "AI Operations Agent — system architecture"))
+    c.add(heading(p, 32, 34, "AI Operations Agent — архитектура системы"))
     c.add(
         caption(
-            p, 32, 54, "Everything the agent can reach, and what stands between it and each system."
+            p, 32, 54, "Всё, до чего агент дотягивается, и что стоит между ним и каждой системой."
         )
     )
 
-    c.add(box(p, 32, 78, 190, 54, "Engineer", "natural-language task", tone="accent"))
+    c.add(box(p, 32, 78, 190, 54, "Инженер", "задача на естественном языке", tone="accent"))
     c.add(arrow(p, [(127, 132), (127, 168)]))
 
     # API layer
@@ -269,9 +316,9 @@ def architecture(p: Palette) -> Canvas:
     c.add(box(p, 234, 238, 172, 34, "GET /metrics", mono=True, radius=6))
 
     # Agent core
-    c.add(region(p, 32, 308, 390, 168, "LangGraph workflow"))
-    c.add(box(p, 48, 336, 172, 46, "State", "typed, checkpointed", tone="neutral"))
-    c.add(box(p, 234, 336, 172, 46, "Guardrails", "budgets · allowlist · r/w"))
+    c.add(region(p, 32, 308, 390, 168, "воркфлоу LangGraph"))
+    c.add(box(p, 48, 336, 172, 46, "Состояние", "типизированное, в чекпоинте", tone="neutral"))
+    c.add(box(p, 234, 336, 172, 46, "Ограничения", "бюджеты · allowlist · чтение/запись"))
     c.add(
         box(
             p,
@@ -279,8 +326,8 @@ def architecture(p: Palette) -> Canvas:
             396,
             172,
             60,
-            "Planner",
-            "chooses the next tool\nfrom the allowed set",
+            "Планировщик",
+            "выбирает следующий инструмент\nиз разрешённых",
             tone="accent",
         )
     )
@@ -291,8 +338,8 @@ def architecture(p: Palette) -> Canvas:
             396,
             172,
             60,
-            "Approval gate",
-            "pauses for a human\nbefore any write",
+            "Подтверждение",
+            "пауза перед любой\nзаписью человеком",
             tone="attention",
         )
     )
@@ -306,7 +353,7 @@ def architecture(p: Palette) -> Canvas:
             390,
             56,
             "LLM  ·  LangChain",
-            "optional — absent, the agent runs its deterministic path",
+            "необязателен: без него агент идёт детерминированным путём",
             tone="ghost",
             dashed=True,
         )
@@ -317,44 +364,48 @@ def architecture(p: Palette) -> Canvas:
 
     # MCP boundary
     c.add(arrow(p, [(422, 392), (486, 392)], "MCP", tone="accent"))
-    c.add(region(p, 486, 168, 482, 308, "MCP integration layer"))
+    c.add(region(p, 486, 168, 482, 308, "слой интеграции MCP"))
     c.add(
         box(
             p,
             504,
-            200,
+            196,
             446,
-            44,
-            "MCP client pool",
-            "discovers tools · read/write from annotations · degrades per server",
+            60,
+            "Пул MCP-клиентов",
+            "находит инструменты · чтение/запись по аннотациям · деградирует по серверам",
             tone="accent",
         )
     )
 
     servers = [
-        ("monitoring", "metrics · alerts\naggregated errors", "success"),
-        ("code", "deployments\ncommits · PRs", "success"),
-        ("incident", "issues\ncreate · comment", "danger"),
-        ("knowledge", "runbooks\nretrieval", "success"),
+        ("monitoring", "метрики · алерты\nагрегированные ошибки", "success"),
+        ("code", "деплои\nкоммиты · PR", "success"),
+        ("incident", "задачи\nсоздание · комментарии", "danger"),
+        ("knowledge", "рунбуки\nпоиск", "success"),
     ]
     for index, (name, detail, tone) in enumerate(servers):
         x = 504 + index * 113
-        c.add(box(p, x, 274, 103, 70, name, detail, tone=tone, mono=True))
-        c.add(arrow(p, [(x + 51, 244), (x + 51, 274)]))
-        c.add(box(p, x, 372, 103, 44, "external", "system", tone="ghost", dashed=True))
-        c.add(arrow(p, [(x + 51, 344), (x + 51, 372)], dashed=True))
+        c.add(box(p, x, 268, 103, 84, name, detail, tone=tone, mono=True))
+        c.add(arrow(p, [(x + 51, 256), (x + 51, 268)]))
+        c.add(box(p, x, 372, 103, 44, "внешняя", "система", tone="ghost", dashed=True))
+        c.add(arrow(p, [(x + 51, 352), (x + 51, 372)], dashed=True))
 
     c.add(
         caption(
-            p, 727, 444, "each server is its own process, speaking MCP over stdio", anchor="middle"
+            p,
+            727,
+            444,
+            "каждый сервер — отдельный процесс, говорит по MCP через stdio",
+            anchor="middle",
         )
     )
 
     # Storage and observability
-    c.add(region(p, 486, 496, 482, 96, "State and telemetry"))
-    c.add(box(p, 504, 524, 140, 50, "PostgreSQL", "runs · approvals\naudit · checkpoints"))
-    c.add(box(p, 656, 524, 140, 50, "Prometheus", "run cost\nwrite safety"))
-    c.add(box(p, 808, 524, 142, 50, "Grafana", "dashboard\nand alerts"))
+    c.add(region(p, 486, 496, 482, 96, "состояние и телеметрия"))
+    c.add(box(p, 504, 524, 140, 50, "PostgreSQL", "запуски · подтверждения\nаудит · чекпоинты"))
+    c.add(box(p, 656, 524, 140, 50, "Prometheus", "стоимость запуска\nбезопасность записи"))
+    c.add(box(p, 808, 524, 142, 50, "Grafana", "дашборд\nи алерты"))
     c.add(arrow(p, [(422, 254), (486, 254)], "", tone="muted"))
     c.add(arrow(p, [(422, 520), (486, 540)]))
 
@@ -367,9 +418,14 @@ def architecture(p: Palette) -> Canvas:
 def workflow(p: Palette) -> Canvas:
     c = Canvas(1000, 700)
 
-    c.add(heading(p, 32, 34, "The investigation graph"))
+    c.add(heading(p, 32, 34, "Граф расследования"))
     c.add(
-        caption(p, 32, 54, "Deterministic work first, then a bounded agentic loop, then a human.")
+        caption(
+            p,
+            32,
+            54,
+            "Сначала детерминированная работа, затем ограниченный агентный цикл, затем человек.",
+        )
     )
 
     w, h = 224, 50
@@ -384,12 +440,12 @@ def workflow(p: Palette) -> Canvas:
     c.add(box(p, mid_l - 38, 82, 76, 28, "START", tone="ghost", radius=14))
     c.add(arrow(p, [(mid_l, 110), (mid_l, 132)]))
 
-    node(main, 132, "analyze_task", "service and time window")
+    node(main, 132, "analyze_task", "сервис и временное окно")
     c.add(arrow(p, [(mid_l, 182), (mid_l, 206)]))
 
-    node(main, 206, "collect_initial_context", "metrics · deploys · errors · alerts")
+    node(main, 206, "collect_initial_context", "метрики · деплои · ошибки · алерты")
     c.add(arrow(p, [(main - 4, 231), (main - 76, 231)], tone="danger"))
-    c.add(caption(p, main - 40, 222, "no signal", anchor="middle", size=10.5))
+    c.add(caption(p, main - 40, 222, "нет сигнала", anchor="middle", size=10.5))
     c.add(
         box(
             p,
@@ -398,29 +454,29 @@ def workflow(p: Palette) -> Canvas:
             200,
             50,
             "insufficient_context",
-            "stops, and says why",
+            "останавливается и объясняет",
             tone="danger",
             mono=True,
         )
     )
     c.add(arrow(p, [(mid_l, 256), (mid_l, 280)]))
 
-    node(main, 280, "correlate", "spike ↔ deployment ↔ commit", tone="success")
+    node(main, 280, "correlate", "всплеск ↔ деплой ↔ коммит", tone="success")
     c.add(arrow(p, [(mid_l, 330), (mid_l, 362)]))
 
     # ── The loop ────────────────────────────────────────────────────────────
-    c.add(region(p, main - 116, 352, w + 148, 264, "agentic loop — bounded"))
-    node(main, 382, "select_tool", "the model's one real choice", tone="accent")
+    c.add(region(p, main - 116, 352, w + 148, 264, "агентный цикл — ограниченный"))
+    node(main, 382, "select_tool", "единственный реальный выбор модели", tone="accent")
     c.add(arrow(p, [(mid_l, 432), (mid_l, 458)]))
-    node(main, 458, "execute_tool", "validated · timed · recorded")
+    node(main, 458, "execute_tool", "проверен · по таймауту · записан")
     c.add(arrow(p, [(mid_l, 508), (mid_l, 534)]))
-    node(main, 534, "evaluate_observation", "did that change anything?")
+    node(main, 534, "evaluate_observation", "это что-то изменило?")
 
     c.add(
         arrow(
             p,
             [(main, 559), (main - 92, 559), (main - 92, 407), (main, 407)],
-            "more to learn",
+            "есть что узнать",
             tone="accent",
             label_dx=-52,
             label_dy=4,
@@ -431,19 +487,19 @@ def workflow(p: Palette) -> Canvas:
             p,
             main - 104,
             604,
-            "exits on: nothing asked · budget spent · no progress · 4 iterations",
+            "выходы: ничего не запрошено · бюджет исчерпан · нет прогресса · 4 итерации",
             size=10.5,
         )
     )
 
     # ── Right column, read bottom to top ────────────────────────────────────
-    c.add(arrow(p, [(main + w, 559), (right + 14, 559)], "enough", label_dy=-9))
-    node(right, 534, "generate_analysis", "structured · grounded", tone="success")
+    c.add(arrow(p, [(main + w, 559), (right + 14, 559)], "достаточно", label_dy=-9))
+    node(right, 534, "generate_analysis", "структурирован · заземлён", tone="success")
     c.add(arrow(p, [(mid_r, 534), (mid_r, 504)]))
 
-    node(right, 454, "propose_action", "confidence ≥ 0.6, or nothing")
+    node(right, 454, "propose_action", "уверенность ≥ 0.6, иначе ничего")
     c.add(arrow(p, [(mid_r, 454), (mid_r, 424)], tone="danger"))
-    c.add(caption(p, mid_r + 10, 443, "write proposed", size=10.5))
+    c.add(caption(p, mid_r + 10, 443, "предложена запись", size=10.5))
     c.add(
         arrow(
             p,
@@ -452,11 +508,11 @@ def workflow(p: Palette) -> Canvas:
             tone="muted",
         )
     )
-    c.add(caption(p, right - 50, 300, "nothing to write", anchor="end", size=10.5))
+    c.add(caption(p, right - 50, 300, "писать нечего", anchor="end", size=10.5))
 
-    node(right, 374, "request_approval", "graph pauses · state checkpointed", tone="attention")
+    node(right, 374, "request_approval", "пауза · состояние в чекпоинте", tone="attention")
     c.add(arrow(p, [(mid_r, 374), (mid_r, 344)], tone="danger"))
-    c.add(caption(p, mid_r + 10, 363, "approved", size=10.5))
+    c.add(caption(p, mid_r + 10, 363, "подтверждено", size=10.5))
     c.add(
         arrow(
             p,
@@ -464,12 +520,12 @@ def workflow(p: Palette) -> Canvas:
             "",
         )
     )
-    c.add(caption(p, right + w + 50, 300, "rejected", size=10.5))
+    c.add(caption(p, right + w + 34, 300, "отклонено", anchor="end", size=10.5))
 
-    node(right, 294, "execute_action", "one tool · one step", tone="danger")
+    node(right, 294, "execute_action", "один инструмент · один шаг", tone="danger")
     c.add(arrow(p, [(mid_r, 294), (mid_r, 240)]))
 
-    node(right, 190, "final_response", "says what it did, and did not, do")
+    node(right, 190, "final_response", "что сделал и чего не сделал")
     c.add(arrow(p, [(mid_r, 190), (mid_r, 164)]))
     c.add(box(p, mid_r - 32, 136, 64, 28, "END", tone="ghost", radius=14))
 
@@ -480,8 +536,8 @@ def workflow(p: Palette) -> Canvas:
             p,
             52,
             656,
-            "The pause is durable. State is checkpointed, so the decision arrives as a "
-            "separate HTTP request from a separate person —",
+            "Пауза долговечная: состояние лежит в чекпоинте, поэтому решение приходит "
+            "отдельным HTTP-запросом от отдельного человека —",
             muted=False,
             size=12,
         )
@@ -491,8 +547,8 @@ def workflow(p: Palette) -> Canvas:
             p,
             52,
             673,
-            "and the action executed is the one the graph saved, not anything the "
-            "approving request carries.",
+            "а выполняется то действие, которое сохранил граф, а не то, что несёт "
+            "подтверждающий запрос.",
             size=11.5,
         )
     )
@@ -505,45 +561,45 @@ def workflow(p: Palette) -> Canvas:
 def guardrails(p: Palette) -> Canvas:
     c = Canvas(1000, 430)
 
-    c.add(heading(p, 32, 34, "What the agent cannot do"))
+    c.add(heading(p, 32, 34, "Чего агент не может"))
     c.add(
         caption(
             p,
             32,
             54,
-            "Every limit below is enforced in code, before a tool runs. "
-            "None of it is a prompt instruction.",
+            "Каждое ограничение ниже вшито в код и проверяется до запуска инструмента. "
+            "Ничего из этого не является инструкцией в промпте.",
         )
     )
 
     lanes = [
         (
-            "The model proposes",
+            "Модель предлагает",
             "accent",
             [
-                "sees only the tools the policy allows",
-                "answers with a name and arguments",
-                "cannot add a tool or widen its own reach",
+                "видит только разрешённые политикой инструменты",
+                "отвечает именем и аргументами",
+                "не может добавить инструмент или расширить доступ",
             ],
         ),
         (
-            "The registry decides",
+            "Реестр решает",
             "neutral",
             [
-                "unknown name → refused and recorded",
-                "arguments validated against a schema",
-                "identical call repeated → refused",
-                "timeout and retry belong to the runtime",
+                "неизвестное имя → отказ, вызов записан",
+                "аргументы проверяются схемой",
+                "повтор идентичного вызова → отказ",
+                "таймаут и ретрай — свойство рантайма",
             ],
         ),
         (
-            "A person authorises",
+            "Человек санкционирует",
             "attention",
             [
-                "write tools are invisible to the planner",
-                "the graph pauses; state is checkpointed",
-                "the decision carries no action of its own",
-                "permission is granted for one step",
+                "write-инструменты не видны планировщику",
+                "граф встаёт на паузу, состояние сохраняется",
+                "решение не несёт собственного действия",
+                "право выдаётся на один шаг",
             ],
         ),
     ]
@@ -559,25 +615,44 @@ def guardrails(p: Palette) -> Canvas:
     c.add(arrow(p, [(324, 104), (345, 104)], tone="accent"))
     c.add(arrow(p, [(637, 104), (658, 104)], tone="accent"))
 
-    c.add(box(p, 32, 300, 936, 44, "", "", tone="danger", radius=10))
+    c.add(box(p, 32, 296, 936, 56, "", "", tone="danger", radius=10))
     c.add(
         caption(
             p,
             52,
-            327,
-            "agent_unapproved_writes_total must stay at zero. It is derived from the recorded "
-            "calls, not from a flag, and pages immediately if it ever moves.",
+            320,
+            "agent_unapproved_writes_total обязан стоять на нуле.",
             muted=False,
             size=12.5,
+            mono=True,
+        )
+    )
+    c.add(
+        caption(
+            p,
+            52,
+            339,
+            "Он выводится из записанных вызовов, а не из флага, и поднимает тревогу "
+            "сразу, как только сдвинется.",
+            size=11.5,
         )
     )
     c.add(
         caption(
             p,
             32,
-            380,
-            "Budgets: 12 tool calls · 30 workflow steps · 4 loop iterations · 15 s per tool · "
-            "2 identical calls · no shell, no code execution, no tool outside the registry.",
+            384,
+            "Бюджеты: 12 вызовов · 30 шагов графа · 4 итерации цикла · 15 с на инструмент · "
+            "2 идентичных вызова.",
+            size=12,
+        )
+    )
+    c.add(
+        caption(
+            p,
+            32,
+            404,
+            "Никакого shell, исполнения произвольного кода и инструментов вне реестра.",
             size=12,
         )
     )
@@ -587,21 +662,21 @@ def guardrails(p: Palette) -> Canvas:
 DIAGRAMS = {
     "architecture": (
         architecture,
-        "AI Operations Agent architecture",
-        "The agent sits behind a FastAPI service and reaches four external systems "
-        "through MCP servers, with PostgreSQL for state and Prometheus for telemetry.",
+        "Архитектура AI Operations Agent",
+        "Агент живёт за FastAPI-сервисом и дотягивается до четырёх внешних систем "
+        "через MCP-серверы; состояние в PostgreSQL, телеметрия в Prometheus.",
     ),
     "workflow": (
         workflow,
-        "The investigation graph",
-        "A LangGraph workflow: deterministic collection and correlation, then a bounded "
-        "loop of tool selection, then a human approval gate before any write.",
+        "Граф расследования",
+        "Воркфлоу на LangGraph: детерминированный сбор и корреляция, затем ограниченный "
+        "цикл выбора инструментов, затем подтверждение человеком перед любой записью.",
     ),
     "guardrails": (
         guardrails,
-        "What the agent cannot do",
-        "Three layers of enforcement: the model proposes, the registry validates and "
-        "refuses, and a person authorises every write.",
+        "Чего агент не может",
+        "Три слоя контроля: модель предлагает, реестр проверяет и отказывает, человек "
+        "санкционирует каждую запись.",
     ),
 }
 
