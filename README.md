@@ -5,7 +5,7 @@
 **Агент, который расследует инциденты в backend-сервисах: сам решает, куда посмотреть,
 собирает данные из четырёх систем, сопоставляет их — и не меняет ничего без человека.**
 
-[![CI](https://github.com/SlavaKlkv/ai-operations-agent/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/SlavaKlkv/ai-operations-agent/actions/workflows/ci.yml)
+[![CI](https://github.com/SlavaKlkv/ai-operations-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/SlavaKlkv/ai-operations-agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![LangGraph](https://img.shields.io/badge/orchestration-LangGraph-1C3C3C)](https://langchain-ai.github.io/langgraph/)
 [![MCP](https://img.shields.io/badge/integration-MCP-6E56CF)](https://modelcontextprotocol.io/)
