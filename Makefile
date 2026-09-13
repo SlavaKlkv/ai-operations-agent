@@ -7,7 +7,7 @@ help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 install:  ## Create the virtualenv and install the project with dev extras
-	uv venv --python 3.12
+	uv venv --python 3.13
 	uv pip install -e ".[dev]"
 
 up:  ## Start PostgreSQL and Redis
